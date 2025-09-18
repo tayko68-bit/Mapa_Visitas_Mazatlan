@@ -13,20 +13,17 @@
 <body>
   <div id="map"></div>
   <script>
-    // Inicializar mapa centrado en Mazatlán
     const map = L.map('map').setView([23.2329, -106.4062], 12);
 
-    // Capa base
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Paleta de colores para otros vendedores
-    const colorPalette = ["red", "orange", "yellow", "black", "violet", "darkgreen", "darkred", "gold"];
+    // Colores válidos en el repo
+    const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
     const vendorColors = {};
     let colorIndex = 0;
 
-    // Función para crear íconos por color
     function createColoredIcon(color) {
       return L.icon({
         iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
@@ -38,13 +35,12 @@
       });
     }
 
-    // Función para obtener ícono por vendedor
     function getVendorIcon(vendor) {
       const name = vendor.toUpperCase().trim();
       if (name === "WENDY") {
-        return createColoredIcon("pink");
+        return createColoredIcon("violet");
       } else if (name === "ALFREDO") {
-        return createColoredIcon("cadetblue");
+        return createColoredIcon("green");
       } else {
         if (!vendorColors[vendor]) {
           vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
@@ -54,7 +50,6 @@
       }
     }
 
-    // Leer CSV publicado
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
       download: true,
       header: true,
