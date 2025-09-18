@@ -21,15 +21,10 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Colores por vendedor
-    const vendedorColors = {
-      "Pedro": "red",
-      "Juan": "green",
-      "Don Pancho": "orange",
-      "Rossy": "purple",
-      "Anabel": "blue",
-      "Lisbeth": "pink"
-    };
+    // Paleta de colores disponibles
+    const colorPalette = ["red", "green", "orange", "violet", "yellow", "black"];
+    const vendorColors = {}; // asignación dinámica de vendedor → color
+    let colorIndex = 0;
 
     // Función para crear ícono con color
     function createColoredIcon(color) {
@@ -43,6 +38,15 @@
       });
     }
 
+    // Función para obtener el color de un vendedor (asignación automática)
+    function getVendorColor(vendor) {
+      if (!vendorColors[vendor]) {
+        vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
+        colorIndex++;
+      }
+      return vendorColors[vendor];
+    }
+
     // Leer CSV publicado
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
       download: true,
@@ -52,8 +56,8 @@
           if (row.COORDENADAS) {
             const coords = row.COORDENADAS.split(',').map(Number);
             if (coords.length === 2) {
-              const vendedor = row["NOMBRE VENDEDOR"];
-              const color = vendedorColors[vendedor] || "blue"; // Default azul si no está en la lista
+              const vendedor = row["NOMBRE VENDEDOR"].trim();
+              const color = getVendorColor(vendedor); 
               const marker = L.marker(coords, { icon: createColoredIcon(color) }).addTo(map);
               marker.bindPopup(
                 `<b>Fecha:</b> ${row.FECHA}<br>
@@ -66,6 +70,7 @@
             }
           }
         });
+        console.log("Colores asignados:", vendorColors);
       }
     });
   </script>
