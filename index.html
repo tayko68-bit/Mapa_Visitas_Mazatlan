@@ -22,7 +22,7 @@
     }).addTo(map);
 
     // Paleta de colores para vendedores distintos de Wendy y Alfredo
-    const colorPalette = ["green", "orange", "yellow", "black"];
+    const colorPalette = ["red", "orange", "yellow", "black"]; 
     const vendorColors = {};
     let colorIndex = 0;
 
@@ -44,7 +44,7 @@
       if (name === "WENDY") {
         return createColoredIcon("violet");
       } else if (name === "ALFREDO") {
-        return createColoredIcon("blue");
+        return createColoredIcon("green");
       } else {
         if (!vendorColors[vendor]) {
           vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
@@ -77,6 +77,7 @@
             }
           }
         });
+        console.log("Colores asignados:", vendorColors);
       }
     });
   </script>
