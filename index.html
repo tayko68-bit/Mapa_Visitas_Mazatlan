@@ -1,127 +1,141 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mapa Dinámico de Visitas</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIINfB67JpldoP+W+Lbdj3+c/d0iJqT46A="
-        crossorigin=""/>
-    <style>
-        #map {
-            height: 100vh;
-            width: 100%;
-        }
-        .info-window {
-            font-family: Arial, sans-serif;
-            font-size: 14px;
-        }
-    </style>
+  <title>Mapa de Vendedores</title>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    #map { height: 100vh; }
+    #leyenda {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    #leyenda ul { list-style: none; padding: 0; margin: 0; }
+    #leyenda li { cursor: pointer; margin: 5px 0; }
+    .hot-marker .pulse {
+      width: 20px;
+      height: 20px;
+      background: rgba(255,0,0,0.5);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 0.3; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+  </style>
 </head>
 <body>
-    <div id="map"></div>
+  <div id="map"></div>
+  <div id="leyenda"><h3>Vendedores</h3><ul id="lista"></ul></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20n9sYmPjC49D/K5/I7L2c5q40a1z7tT71k7Vp89VlA="
-        crossorigin=""></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20n9sYmPjC49D/K5/I7L2c5q40a1z7tT71k7Vp89VlA="
-    crossorigin=""></script>
-<script>
-    // Reemplaza este valor con la URL de tu aplicación web de Google Apps Script
-    const SCRIPT_URL = 'TU_URL_DEL_SCRIPT_DE_APPS_SCRIPT';
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    let map = L.map('map').setView([24.8, -107.4], 12); // Coordenadas iniciales (Culiacán)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    const map = L.map('map').setView([23.2494, -106.4172], 12);
+    let marcadores = [];
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    // 👇 Reemplaza con el enlace de tu Google Sheet publicado en CSV
+    let urlCSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQvPfJWEmigh61MLfqMUfZAjd3z3tlkUDBGZl7U0dO8qxEHDFHFGIao_Y8bO98j2z8K6_g8-S9uMkVe/pub?output=csv";
 
-    // Almacena todos los puntos para poder hacer la búsqueda
-    let todosLosPuntos = [];
-
-    // Icono personalizado para las ferreterías
-    const ferreteriaIcon = L.icon({
-        iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.4/images/marker-shadow.png',
-        shadowSize: [41, 41]
-    });
-
-    // Función para calcular la distancia entre dos coordenadas (Haversine)
-    function distanciaEntrePuntos(lat1, lon1, lat2, lon2) {
-        const R = 6371; // Radio de la Tierra en kilómetros
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = 
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-    // Obtiene los datos del script y añade los marcadores
-    fetch(SCRIPT_URL)
-        .then(response => response.json())
-        .then(data => {
-            todosLosPuntos = data; // Guarda los datos para la búsqueda
-            data.forEach(visita => {
-                const marker = L.marker([visita.lat, visita.lng]).addTo(map);
-
-                const infoContent = `
-                    <div class="info-window">
-                        <h3>${visita.nombre}</h3>
-                        <p><b>Vendedor:</b> ${visita.vendedor}</p>
-                        <p><b>Giro:</b> ${visita.giro}</p>
-                        <p><b>Motivo:</b> ${visita.motivo}</p>
-                        <p><b>Fecha:</b> ${visita.fecha}</p>
-                        <p><b>Observaciones:</b> ${visita.observaciones}</p>
-                        <button onclick="buscarFerreteriasCercanas(${visita.lat}, ${visita.lng})">Buscar Ferreterías cercanas</button>
-                    </div>
-                `;
-
-                marker.bindPopup(infoContent);
-            });
-        })
-        .catch(error => console.error('Error al obtener los datos:', error));
-
-    // Función que se activa al hacer clic en el botón
-    function buscarFerreteriasCercanas(lat, lng) {
-        // Limpia los marcadores de la búsqueda anterior
-        map.eachLayer(layer => {
-            if (layer instanceof L.Marker && layer.options.icon === ferreteriaIcon) {
-                map.removeLayer(layer);
-            }
-        });
-
-        // Filtra y encuentra las ferreterías cercanas (radio de 2 km)
-        const ferreteriasCercanas = todosLosPuntos.filter(punto => {
-            if (punto.giro === 'Ferretería') {
-                const distancia = distanciaEntrePuntos(lat, lng, punto.lat, punto.lng);
-                return distancia <= 2; // 2 kilómetros
-            }
-            return false;
-        });
-
-        // Muestra las ferreterías encontradas
-        if (ferreteriasCercanas.length > 0) {
-            ferreteriasCercanas.forEach(ferreteria => {
-                const marker = L.marker([ferreteria.lat, ferreteria.lng], { icon: ferreteriaIcon }).addTo(map);
-                const infoContent = `
-                    <div class="info-window">
-                        <h4>${ferreteria.nombre}</h4>
-                        <p><b>Vendedor:</b> ${ferreteria.vendedor}</p>
-                        <p><b>Distancia:</b> ${distanciaEntrePuntos(lat, lng, ferreteria.lat, ferreteria.lng).toFixed(2)} km</p>
-                    </div>
-                `;
-                marker.bindPopup(infoContent).openPopup();
-            });
-            alert(`Se encontraron ${ferreteriasCercanas.length} ferreterías cercanas.`);
-        } else {
-            alert('No se encontraron ferreterías cercanas en un radio de 2 km.');
+    function cargarDatos() {
+      Papa.parse(urlCSV, {
+        download: true,
+        header: true,
+        complete: function(results) {
+          actualizarMapa(results.data);
         }
+      });
     }
-</script>
+
+    function actualizarMapa(datos) {
+      // limpiar marcadores previos
+      marcadores.forEach(m => map.removeLayer(m));
+      marcadores = [];
+
+      let hoy = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+      let mesActual = hoy.slice(0,7); // YYYY-MM
+      let conteo = {};
+      let vendedoresUnicos = new Set();
+
+      datos.forEach(fila => {
+        if (!fila["coordenadas"] || !fila["nombre vendedor"]) return;
+
+        let [lat, lng] = fila["coordenadas"].split(",");
+        let vendedor = fila["nombre vendedor"].trim();
+        vendedoresUnicos.add(vendedor);
+
+        let esHoy = fila["fecha"] === hoy;
+
+        // Icono normal
+        let icono = L.marker([lat, lng]);
+        // Icono pulsante si es visita de hoy
+        if (esHoy) {
+          icono = L.marker([lat, lng], {
+            icon: L.divIcon({
+              className: "hot-marker",
+              html: '<div class="pulse"></div>',
+              iconSize: [20,20]
+            })
+          });
+        }
+
+        // Popup con la info
+        icono.bindPopup(
+          `<b>${fila["nombre vendedor"]}</b><br>
+          ${fila["giro"] || ""}<br>
+          ${fila["motivo"] || ""}<br>
+          ${fila["observaciones"] || ""}`
+        );
+        icono.addTo(map);
+        marcadores.push(icono);
+
+        // Conteo visitas por vendedor
+        if (!conteo[vendedor]) conteo[vendedor] = {hoy:0, mes:0};
+        if (esHoy) conteo[vendedor].hoy++;
+        if (fila["fecha"].startsWith(mesActual)) conteo[vendedor].mes++;
+      });
+
+      construirLeyenda(conteo, vendedoresUnicos);
+    }
+
+    function construirLeyenda(conteo, vendedoresUnicos) {
+      let lista = document.getElementById("lista");
+      lista.innerHTML = "";
+      vendedoresUnicos.forEach(v => {
+        let stats = conteo[v] || {hoy:0, mes:0};
+        let li = document.createElement("li");
+        li.innerHTML = `${v} (${stats.hoy} / ${stats.mes})`;
+        li.onclick = () => centrarVendedor(v);
+        lista.appendChild(li);
+      });
+    }
+
+    function centrarVendedor(nombre) {
+      let puntos = [];
+      marcadores.forEach(m => {
+        if (m.getPopup().getContent().includes(nombre)) {
+          puntos.push(m.getLatLng());
+        }
+      });
+      if (puntos.length > 0) map.fitBounds(L.latLngBounds(puntos));
+    }
+
+    // Primera carga y refresco cada minuto
+    cargarDatos();
+    setInterval(cargarDatos, 60000);
+  </script>
 </body>
 </html>
