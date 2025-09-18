@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
     #map { height: 100vh; }
+
+    /* Leyenda */
     .legend {
       position: absolute;
       top: 10px;
@@ -20,6 +22,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       max-height: 90vh;
       overflow-y: auto;
+      z-index: 1000;
     }
     .legend-item {
       display: flex;
@@ -36,108 +39,100 @@
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div class="legend" id="legend"><strong>Vendedores</strong></div>
+<div id="map"></div>
+<div class="legend" id="legend"><strong>Vendedores</strong></div>
 
-  <script>
-    const map = L.map('map').setView([23.2329, -106.4062], 12);
+<script>
+const map = L.map('map').setView([23.2329, -106.4062], 12);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-    const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
-    const vendorColors = {};
-    let colorIndex = 0;
+// Colores válidos para los iconos Leaflet
+const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
+const vendorColors = {};
+let colorIndex = 0;
 
-    function createColoredIcon(color) {
-      return L.icon({
-        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-      });
-    }
+function createColoredIcon(color) {
+  return L.icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+}
 
-    function getVendorIcon(vendor) {
-      const name = vendor.toUpperCase().trim();
-      if (name === "WENDY") return createColoredIcon("violet");
-      if (name === "ALFREDO") return createColoredIcon("green");
-      if (!vendorColors[vendor]) {
-        vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
-        colorIndex++;
-      }
-      return createColoredIcon(vendorColors[vendor]);
-    }
+function getVendorIcon(vendor) {
+  const name = vendor.toUpperCase().trim();
+  if (name === "WENDY") return createColoredIcon("violet");
+  if (name === "ALFREDO") return createColoredIcon("green");
+  if (!vendorColors[vendor]) {
+    vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
+    colorIndex++;
+  }
+  return createColoredIcon(vendorColors[vendor]);
+}
 
-    function updateLegend() {
-      const legendDiv = document.getElementById("legend");
-      // Limpiar legend
-      legendDiv.innerHTML = "<strong>Vendedores</strong>";
-      for (const [vendor, color] of Object.entries(vendorColors)) {
-        const item = document.createElement("div");
-        item.className = "legend-item";
-        const colorBox = document.createElement("div");
-        colorBox.className = "legend-color";
-        colorBox.style.backgroundColor = color;
-        item.appendChild(colorBox);
-        const nameText = document.createElement("span");
-        nameText.textContent = vendor;
-        item.appendChild(nameText);
-        legendDiv.appendChild(item);
-      }
-      // Agregar WENDY y ALFREDO si no están en vendorColors
-      if (!vendorColors["WENDY"]) {
-        const item = document.createElement("div");
-        item.className = "legend-item";
-        const colorBox = document.createElement("div");
-        colorBox.className = "legend-color";
-        colorBox.style.backgroundColor = "violet";
-        item.appendChild(colorBox);
-        item.appendChild(document.createTextNode("WENDY"));
-        legendDiv.appendChild(item);
-      }
-      if (!vendorColors["ALFREDO"]) {
-        const item = document.createElement("div");
-        item.className = "legend-item";
-        const colorBox = document.createElement("div");
-        colorBox.className = "legend-color";
-        colorBox.style.backgroundColor = "green";
-        item.appendChild(colorBox);
-        item.appendChild(document.createTextNode("ALFREDO"));
-        legendDiv.appendChild(item);
-      }
-    }
+function updateLegend() {
+  const legendDiv = document.getElementById("legend");
+  legendDiv.innerHTML = "<strong>Vendedores</strong>";
+  // Primero Wendy y Alfredo
+  const special = {"WENDY":"violet","ALFREDO":"green"};
+  for (const [v, color] of Object.entries(special)) {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    const colorBox = document.createElement("div");
+    colorBox.className = "legend-color";
+    colorBox.style.backgroundColor = color;
+    item.appendChild(colorBox);
+    item.appendChild(document.createTextNode(v));
+    legendDiv.appendChild(item);
+  }
+  // Luego otros vendedores
+  for (const [v, color] of Object.entries(vendorColors)) {
+    if (v.toUpperCase() === "WENDY" || v.toUpperCase() === "ALFREDO") continue;
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    const colorBox = document.createElement("div");
+    colorBox.className = "legend-color";
+    colorBox.style.backgroundColor = color;
+    item.appendChild(colorBox);
+    item.appendChild(document.createTextNode(v));
+    legendDiv.appendChild(item);
+  }
+}
 
-    Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
-      download: true,
-      header: true,
-      complete: function(results) {
-        results.data.forEach(row => {
-          if (row.COORDENADAS) {
-            const coords = row.COORDENADAS.split(',').map(Number);
-            if (coords.length === 2) {
-              const vendedor = row["NOMBRE VENDEDOR"].trim();
-              const icon = getVendorIcon(vendedor);
-              L.marker(coords, { icon })
-                .addTo(map)
-                .bindPopup(
-                  `<b>Fecha:</b> ${row.FECHA}<br>
-                   <b>Vendedor:</b> ${vendedor}<br>
-                   <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
-                   <b>Giro:</b> ${row.GIRO}<br>
-                   <b>Motivo:</b> ${row.MOTIVO}<br>
-                   <b>Obs:</b> ${row.OBSERVACIONES}`
-                );
-            }
-          }
-        });
-        updateLegend();
-        console.log("Colores asignados:", vendorColors);
+// Cargar CSV
+Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
+  download: true,
+  header: true,
+  complete: function(results) {
+    results.data.forEach(row => {
+      if (row.COORDENADAS) {
+        const coords = row.COORDENADAS.split(',').map(Number);
+        if (coords.length === 2) {
+          const vendedor = row["NOMBRE VENDEDOR"].trim();
+          const icon = getVendorIcon(vendedor);
+          L.marker(coords, { icon })
+            .addTo(map)
+            .bindPopup(
+              `<b>Fecha:</b> ${row.FECHA}<br>
+               <b>Vendedor:</b> ${vendedor}<br>
+               <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
+               <b>Giro:</b> ${row.GIRO}<br>
+               <b>Motivo:</b> ${row.MOTIVO}<br>
+               <b>Obs:</b> ${row.OBSERVACIONES}`
+            );
+        }
       }
     });
-  </script>
+    updateLegend();
+    console.log("Colores asignados:", vendorColors);
+  }
+});
+</script>
 </body>
 </html>
