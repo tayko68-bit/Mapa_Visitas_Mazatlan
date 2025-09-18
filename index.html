@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Mapa de Vendedores - Mazatlán</title>
+  <title>Mapa de Vendedores - Mazatlán / Culiacán</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
@@ -21,8 +21,8 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Paleta de colores para vendedores distintos de Wendy y Alfredo
-    const colorPalette = ["red", "orange", "yellow", "black"]; 
+    // Paleta de colores para otros vendedores
+    const colorPalette = ["red", "orange", "yellow", "black", "violet", "darkgreen", "darkred", "gold"];
     const vendorColors = {};
     let colorIndex = 0;
 
@@ -38,13 +38,13 @@
       });
     }
 
-    // Función para obtener color por vendedor
+    // Función para obtener ícono por vendedor
     function getVendorIcon(vendor) {
       const name = vendor.toUpperCase().trim();
       if (name === "WENDY") {
-        return createColoredIcon("violet");
+        return createColoredIcon("pink");
       } else if (name === "ALFREDO") {
-        return createColoredIcon("green");
+        return createColoredIcon("cadetblue");
       } else {
         if (!vendorColors[vendor]) {
           vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
