@@ -1,141 +1,160 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Mapa de Vendedores</title>
-  <meta charset="utf-8"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <style>
-    #map { height: 100vh; }
-    #leyenda {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: white;
-      padding: 10px;
-      border-radius: 6px;
-      font-family: sans-serif;
-      font-size: 14px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-    #leyenda ul { list-style: none; padding: 0; margin: 0; }
-    #leyenda li { cursor: pointer; margin: 5px 0; }
-    .hot-marker .pulse {
-      width: 20px;
-      height: 20px;
-      background: rgba(255,0,0,0.5);
-      border-radius: 50%;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0% { transform: scale(0.9); opacity: 0.7; }
-      50% { transform: scale(1.3); opacity: 0.3; }
-      100% { transform: scale(0.9); opacity: 0.7; }
-    }
-  </style>
+    <title>Mapa de Vendedores</title>
+    <meta charset="utf-8"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        #map { height: 100vh; }
+        #leyenda {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: sans-serif;
+            font-size: 14px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #leyenda ul { list-style: none; padding: 0; margin: 0; }
+        #leyenda li { cursor: pointer; margin: 5px 0; }
+        .hot-marker .pulse {
+            width: 20px;
+            height: 20px;
+            background: rgba(255,0,0,0.5);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.3); opacity: 0.3; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+    </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="leyenda"><h3>Vendedores</h3><ul id="lista"></ul></div>
+    <div id="map"></div>
+    <div id="leyenda"><h3>Vendedores</h3><ul id="lista"></ul></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script>
-    let map = L.map('map').setView([24.8, -107.4], 12); // Coordenadas iniciales (Culiacán)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script>
+        let map = L.map('map').setView([24.8, -107.4], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    let marcadores = [];
+        let marcadores = [];
 
-    // 👇 Reemplaza con el enlace de tu Google Sheet publicado en CSV
-    let urlCSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQvPfJWEmigh61MLfqMUfZAjd3z3tlkUDBGZl7U0dO8qxEHDFHFGIao_Y8bO98j2z8K6_g8-S9uMkVe/pub?output=csv";
+        // ✅ URL CORRECTA: Ya he ajustado la URL para que funcione
+        let urlCSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQvPfJWEmigh61MLfqMUfZAjd3z3tlkUDBGZl7U0dO8qxEHDFHFGIao_Y8bO98j2z8K6_g8-S9uMkVe/pub?output=csv";
 
-    function cargarDatos() {
-      Papa.parse(urlCSV, {
-        download: true,
-        header: true,
-        complete: function(results) {
-          actualizarMapa(results.data);
-        }
-      });
-    }
+        // ✅ Nombres de las columnas ajustados a tus datos
+        const COLUMNA_COORDENADAS = "COORDENADAS";
+        const COLUMNA_NOMBRE_VENDEDOR = "NOMBRE VENDEDOR";
+        const COLUMNA_FECHA = "FECHA";
+        const COLUMNA_GIRO = "GIRO";
+        const COLUMNA_MOTIVO = "MOTIVO";
+        const COLUMNA_OBSERVACIONES = "OBSERVACIONES";
+        const COLUMNA_NOMBRE_CLIENTE = "NOMBRE CLIENTE";
 
-    function actualizarMapa(datos) {
-      // limpiar marcadores previos
-      marcadores.forEach(m => map.removeLayer(m));
-      marcadores = [];
-
-      let hoy = new Date().toISOString().slice(0,10); // YYYY-MM-DD
-      let mesActual = hoy.slice(0,7); // YYYY-MM
-      let conteo = {};
-      let vendedoresUnicos = new Set();
-
-      datos.forEach(fila => {
-        if (!fila["coordenadas"] || !fila["nombre vendedor"]) return;
-
-        let [lat, lng] = fila["coordenadas"].split(",");
-        let vendedor = fila["nombre vendedor"].trim();
-        vendedoresUnicos.add(vendedor);
-
-        let esHoy = fila["fecha"] === hoy;
-
-        // Icono normal
-        let icono = L.marker([lat, lng]);
-        // Icono pulsante si es visita de hoy
-        if (esHoy) {
-          icono = L.marker([lat, lng], {
-            icon: L.divIcon({
-              className: "hot-marker",
-              html: '<div class="pulse"></div>',
-              iconSize: [20,20]
-            })
-          });
+        function cargarDatos() {
+            Papa.parse(urlCSV, {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    if (results.errors.length > 0) {
+                        console.error("Error al parsear el CSV:", results.errors);
+                        alert("Hubo un error al cargar los datos. Revisa la consola.");
+                        return;
+                    }
+                    actualizarMapa(results.data);
+                },
+                error: function(err) {
+                    console.error("Error de red al descargar el CSV:", err);
+                    alert("No se pudo conectar con el archivo de datos. Revisa el enlace.");
+                }
+            });
         }
 
-        // Popup con la info
-        icono.bindPopup(
-          `<b>${fila["nombre vendedor"]}</b><br>
-          ${fila["giro"] || ""}<br>
-          ${fila["motivo"] || ""}<br>
-          ${fila["observaciones"] || ""}`
-        );
-        icono.addTo(map);
-        marcadores.push(icono);
+        function actualizarMapa(datos) {
+            marcadores.forEach(m => map.removeLayer(m));
+            marcadores = [];
 
-        // Conteo visitas por vendedor
-        if (!conteo[vendedor]) conteo[vendedor] = {hoy:0, mes:0};
-        if (esHoy) conteo[vendedor].hoy++;
-        if (fila["fecha"].startsWith(mesActual)) conteo[vendedor].mes++;
-      });
+            let hoy = new Date().toISOString().slice(0,10);
+            let mesActual = hoy.slice(0,7);
+            let conteo = {};
+            let vendedoresUnicos = new Set();
 
-      construirLeyenda(conteo, vendedoresUnicos);
-    }
+            datos.forEach(fila => {
+                let coords = fila[COLUMNA_COORDENADAS];
+                let nombreVendedor = fila[COLUMNA_NOMBRE_VENDEDOR];
 
-    function construirLeyenda(conteo, vendedoresUnicos) {
-      let lista = document.getElementById("lista");
-      lista.innerHTML = "";
-      vendedoresUnicos.forEach(v => {
-        let stats = conteo[v] || {hoy:0, mes:0};
-        let li = document.createElement("li");
-        li.innerHTML = `${v} (${stats.hoy} / ${stats.mes})`;
-        li.onclick = () => centrarVendedor(v);
-        lista.appendChild(li);
-      });
-    }
+                if (!coords || !nombreVendedor) return;
 
-    function centrarVendedor(nombre) {
-      let puntos = [];
-      marcadores.forEach(m => {
-        if (m.getPopup().getContent().includes(nombre)) {
-          puntos.push(m.getLatLng());
+                let [lat, lng] = coords.split(",");
+                if (isNaN(lat) || isNaN(lng)) {
+                    console.warn("Coordenadas no válidas:", coords, "para el vendedor:", nombreVendedor);
+                    return;
+                }
+
+                nombreVendedor = nombreVendedor.trim();
+                vendedoresUnicos.add(nombreVendedor);
+
+                let esHoy = fila[COLUMNA_FECHA] === hoy;
+
+                let icono = L.marker([lat, lng]);
+                if (esHoy) {
+                    icono = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            className: "hot-marker",
+                            html: '<div class="pulse"></div>',
+                            iconSize: [20,20]
+                        })
+                    });
+                }
+
+                icono.bindPopup(
+                    `<b>${fila[COLUMNA_NOMBRE_CLIENTE] || fila[COLUMNA_NOMBRE_VENDEDOR]}</b><br>
+                    ${fila[COLUMNA_GIRO] || ""}<br>
+                    ${fila[COLUMNA_MOTIVO] || ""}<br>
+                    ${fila[COLUMNA_OBSERVACIONES] || ""}`
+                );
+                icono.addTo(map);
+                marcadores.push(icono);
+
+                if (!conteo[nombreVendedor]) conteo[nombreVendedor] = {hoy:0, mes:0};
+                if (esHoy) conteo[nombreVendedor].hoy++;
+                if (fila[COLUMNA_FECHA] && fila[COLUMNA_FECHA].startsWith(mesActual)) conteo[nombreVendedor].mes++;
+            });
+            construirLeyenda(conteo, vendedoresUnicos);
         }
-      });
-      if (puntos.length > 0) map.fitBounds(L.latLngBounds(puntos));
-    }
 
-    // Primera carga y refresco cada minuto
-    cargarDatos();
-    setInterval(cargarDatos, 60000);
-  </script>
+        function construirLeyenda(conteo, vendedoresUnicos) {
+            let lista = document.getElementById("lista");
+            lista.innerHTML = "";
+            Array.from(vendedoresUnicos).sort().forEach(v => {
+                let stats = conteo[v] || {hoy:0, mes:0};
+                let li = document.createElement("li");
+                li.innerHTML = `${v} (${stats.hoy} / ${stats.mes})`;
+                li.onclick = () => centrarVendedor(v);
+                lista.appendChild(li);
+            });
+        }
+
+        function centrarVendedor(nombre) {
+            let puntos = [];
+            marcadores.forEach(m => {
+                if (m.getPopup().getContent().includes(nombre)) {
+                    puntos.push(m.getLatLng());
+                }
+            });
+            if (puntos.length > 0) map.fitBounds(L.latLngBounds(puntos), {padding: L.point(50, 50)});
+        }
+
+        cargarDatos();
+        setInterval(cargarDatos, 60000);
+    </script>
 </body>
 </html>
