@@ -24,21 +24,6 @@
     #leyenda li { cursor: pointer; margin: 5px 0; display: flex; align-items: center; }
     .color-cuadro { width: 15px; height: 15px; border-radius: 3px; margin-right: 8px; }
     
-    /* Estilos para el popup */
-    .leaflet-popup-content table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .leaflet-popup-content td {
-      padding: 4px;
-      vertical-align: top;
-    }
-    .leaflet-popup-content td:first-child {
-      font-weight: bold;
-      padding-right: 10px;
-      white-space: nowrap; /* Evita que el texto de la etiqueta se rompa */
-    }
-
     /* Estilos para el ícono de pulso */
     .hot-marker .pulse {
       width: 30px;
@@ -88,14 +73,16 @@
 
     // Función para obtener el color de un vendedor o un color por defecto
     function obtenerColor(vendedor) {
-      return coloresVendedores[vendedor] || "red";
+      return coloresVendedores[vendedor] || "red"; // "red" es el color por defecto
     }
 
     function cargarDatos() {
+      console.log("Cargando CSV...");
       Papa.parse(urlCSV, {
         download: true,
         header: true,
         complete: function(results) {
+          console.log("Datos cargados:", results.data);
           actualizarMapa(results.data);
         }
       });
@@ -111,23 +98,23 @@
       const vendedoresUnicos = new Set();
       
       datos.forEach(fila => {
-        // Normaliza los nombres de las columnas para mayor robustez
-        const coords = fila["Coordenadas GPS"] || fila["COORDENADAS"];
-        const vendedor = (fila["Vendedor"] || fila["NOMBRE VENDEDOR"] || "").trim();
-        const cliente = fila["Cliente"] || fila["Nombre Cliente"] || "";
-        const fecha = fila["Fecha"] || fila["FECHA"] || "";
-        const giro = fila["Giro"] || "";
-        const motivo = fila["Motivo"] || fila["Motivo Visita"] || "";
-        const obs = fila["Observaciones"] || "";
+        console.log("Fila leída:", fila);
         
-        if (!coords || coords === "N/A" || !vendedor) return;
+        // Corregir la columna de Coordenadas y Vendedor si el nombre es diferente
+        const coordenadasCol = fila["Coordenadas GPS"] || fila["COORDENADAS"];
+        const vendedorCol = fila["Vendedor"] || fila["NOMBRE VENDEDOR"];
+        
+        if (!coordenadasCol || !vendedorCol || coordenadasCol === "N/A") return;
 
-        let [lat, lng] = coords.split(",").map(c => parseFloat(c.trim()));
+        let [lat, lng] = coordenadasCol.split(",").map(c => parseFloat(c.trim()));
+        console.log("Coordenadas parseadas:", lat, lng);
+
         if (isNaN(lat) || isNaN(lng)) return;
 
+        const vendedor = vendedorCol.trim();
         vendedoresUnicos.add(vendedor);
 
-        const esHoy = fecha === hoy;
+        const esHoy = fila["Fecha"] === hoy;
         const color = obtenerColor(vendedor);
         let icono;
 
@@ -143,26 +130,24 @@
           });
         }
         
-        // Contenido del popup en formato de tabla
-        const popupContent = `
-          <table>
-            <tr><td>Vendedor:</td><td>${vendedor}</td></tr>
-            <tr><td>Cliente:</td><td>${cliente}</td></tr>
-            <tr><td>Fecha:</td><td>${fecha}</td></tr>
-            <tr><td>Giro:</td><td>${giro}</td></tr>
-            <tr><td>Motivo:</td><td>${motivo}</td></tr>
-            <tr><td>Observaciones:</td><td>${obs}</td></tr>
-          </table>
-        `;
-        icono.bindPopup(popupContent);
+        // El texto del popup ahora es más legible
+        icono.bindPopup(
+          `<b>${vendedor}</b><br>
+           <b>Cliente:</b> ${fila["Cliente"]||""}<br>
+           <b>Giro:</b> ${fila["Giro"]||""}<br>
+           <b>Motivo:</b> ${fila["Motivo"]||""}<br>
+           <b>Observaciones:</b> ${fila["Observaciones"]||""}`
+        );
 
         icono.addTo(map);
         marcadores.push(icono);
+        console.log("Marcador agregado para:", vendedor);
         
         // Conteo de visitas
+        const fechaFila = fila["Fecha"] || fila["FECHA"];
         if (!conteo[vendedor]) conteo[vendedor] = {hoy:0, mes:0};
-        if (fecha === hoy) conteo[vendedor].hoy++;
-        if (fecha.startsWith(mesActual)) conteo[vendedor].mes++;
+        if (fechaFila === hoy) conteo[vendedor].hoy++;
+        if (fechaFila && fechaFila.startsWith(mesActual)) conteo[vendedor].mes++;
       });
 
       construirLeyenda(conteo, Array.from(vendedoresUnicos).sort());
