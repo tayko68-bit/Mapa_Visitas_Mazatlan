@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapa Dinámico de Visitas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIINfB67JpldoP+W+Lbdj3+c/d0iJqT46A="
+        crossorigin=""/>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .info-window {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20n9sYmPjC49D/K5/I7L2c5q40a1z7tT71k7Vp89VlA="
+        crossorigin=""></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20n9sYmPjC49D/K5/I7L2c5q40a1z7tT71k7Vp89VlA="
+    crossorigin=""></script>
+<script>
+    // Reemplaza este valor con la URL de tu aplicación web de Google Apps Script
+    const SCRIPT_URL = 'TU_URL_DEL_SCRIPT_DE_APPS_SCRIPT';
+
+    const map = L.map('map').setView([23.2494, -106.4172], 12);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Almacena todos los puntos para poder hacer la búsqueda
+    let todosLosPuntos = [];
+
+    // Icono personalizado para las ferreterías
+    const ferreteriaIcon = L.icon({
+        iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.4/images/marker-shadow.png',
+        shadowSize: [41, 41]
+    });
+
+    // Función para calcular la distancia entre dos coordenadas (Haversine)
+    function distanciaEntrePuntos(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radio de la Tierra en kilómetros
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    // Obtiene los datos del script y añade los marcadores
+    fetch(SCRIPT_URL)
+        .then(response => response.json())
+        .then(data => {
+            todosLosPuntos = data; // Guarda los datos para la búsqueda
+            data.forEach(visita => {
+                const marker = L.marker([visita.lat, visita.lng]).addTo(map);
+
+                const infoContent = `
+                    <div class="info-window">
+                        <h3>${visita.nombre}</h3>
+                        <p><b>Vendedor:</b> ${visita.vendedor}</p>
+                        <p><b>Giro:</b> ${visita.giro}</p>
+                        <p><b>Motivo:</b> ${visita.motivo}</p>
+                        <p><b>Fecha:</b> ${visita.fecha}</p>
+                        <p><b>Observaciones:</b> ${visita.observaciones}</p>
+                        <button onclick="buscarFerreteriasCercanas(${visita.lat}, ${visita.lng})">Buscar Ferreterías cercanas</button>
+                    </div>
+                `;
+
+                marker.bindPopup(infoContent);
+            });
+        })
+        .catch(error => console.error('Error al obtener los datos:', error));
+
+    // Función que se activa al hacer clic en el botón
+    function buscarFerreteriasCercanas(lat, lng) {
+        // Limpia los marcadores de la búsqueda anterior
+        map.eachLayer(layer => {
+            if (layer instanceof L.Marker && layer.options.icon === ferreteriaIcon) {
+                map.removeLayer(layer);
+            }
+        });
+
+        // Filtra y encuentra las ferreterías cercanas (radio de 2 km)
+        const ferreteriasCercanas = todosLosPuntos.filter(punto => {
+            if (punto.giro === 'Ferretería') {
+                const distancia = distanciaEntrePuntos(lat, lng, punto.lat, punto.lng);
+                return distancia <= 2; // 2 kilómetros
+            }
+            return false;
+        });
+
+        // Muestra las ferreterías encontradas
+        if (ferreteriasCercanas.length > 0) {
+            ferreteriasCercanas.forEach(ferreteria => {
+                const marker = L.marker([ferreteria.lat, ferreteria.lng], { icon: ferreteriaIcon }).addTo(map);
+                const infoContent = `
+                    <div class="info-window">
+                        <h4>${ferreteria.nombre}</h4>
+                        <p><b>Vendedor:</b> ${ferreteria.vendedor}</p>
+                        <p><b>Distancia:</b> ${distanciaEntrePuntos(lat, lng, ferreteria.lat, ferreteria.lng).toFixed(2)} km</p>
+                    </div>
+                `;
+                marker.bindPopup(infoContent).openPopup();
+            });
+            alert(`Se encontraron ${ferreteriasCercanas.length} ferreterías cercanas.`);
+        } else {
+            alert('No se encontraron ferreterías cercanas en un radio de 2 km.');
+        }
+    }
+</script>
+</body>
+</html>
