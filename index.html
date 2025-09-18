@@ -21,12 +21,12 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Paleta de colores disponibles
-    const colorPalette = ["red", "green", "orange", "violet", "yellow", "black"];
-    const vendorColors = {}; // asignación dinámica de vendedor → color
+    // Paleta de colores para vendedores distintos de Wendy y Alfredo
+    const colorPalette = ["green", "orange", "yellow", "black"];
+    const vendorColors = {};
     let colorIndex = 0;
 
-    // Función para crear ícono con color
+    // Función para crear íconos por color
     function createColoredIcon(color) {
       return L.icon({
         iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
@@ -38,13 +38,20 @@
       });
     }
 
-    // Función para obtener el color de un vendedor (asignación automática)
-    function getVendorColor(vendor) {
-      if (!vendorColors[vendor]) {
-        vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
-        colorIndex++;
+    // Función para obtener color por vendedor
+    function getVendorIcon(vendor) {
+      const name = vendor.toUpperCase().trim();
+      if (name === "WENDY") {
+        return createColoredIcon("violet");
+      } else if (name === "ALFREDO") {
+        return createColoredIcon("blue");
+      } else {
+        if (!vendorColors[vendor]) {
+          vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
+          colorIndex++;
+        }
+        return createColoredIcon(vendorColors[vendor]);
       }
-      return vendorColors[vendor];
     }
 
     // Leer CSV publicado
@@ -57,8 +64,8 @@
             const coords = row.COORDENADAS.split(',').map(Number);
             if (coords.length === 2) {
               const vendedor = row["NOMBRE VENDEDOR"].trim();
-              const color = getVendorColor(vendedor); 
-              const marker = L.marker(coords, { icon: createColoredIcon(color) }).addTo(map);
+              const icon = getVendorIcon(vendedor);
+              const marker = L.marker(coords, { icon }).addTo(map);
               marker.bindPopup(
                 `<b>Fecha:</b> ${row.FECHA}<br>
                  <b>Vendedor:</b> ${vendedor}<br>
@@ -70,7 +77,6 @@
             }
           }
         });
-        console.log("Colores asignados:", vendorColors);
       }
     });
   </script>
