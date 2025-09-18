@@ -2,16 +2,43 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Mapa de Vendedores - Mazatlán / Culiacán</title>
+  <title>Mapa de Vendedores con Leyenda</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
     #map { height: 100vh; }
+    .legend {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      margin-right: 6px;
+      border-radius: 50%;
+      border: 1px solid #00000050;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div class="legend" id="legend"><strong>Vendedores</strong></div>
+
   <script>
     const map = L.map('map').setView([23.2329, -106.4062], 12);
 
@@ -19,7 +46,6 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Colores válidos en el repo
     const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
     const vendorColors = {};
     let colorIndex = 0;
@@ -37,16 +63,51 @@
 
     function getVendorIcon(vendor) {
       const name = vendor.toUpperCase().trim();
-      if (name === "WENDY") {
-        return createColoredIcon("violet");
-      } else if (name === "ALFREDO") {
-        return createColoredIcon("green");
-      } else {
-        if (!vendorColors[vendor]) {
-          vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
-          colorIndex++;
-        }
-        return createColoredIcon(vendorColors[vendor]);
+      if (name === "WENDY") return createColoredIcon("violet");
+      if (name === "ALFREDO") return createColoredIcon("green");
+      if (!vendorColors[vendor]) {
+        vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
+        colorIndex++;
+      }
+      return createColoredIcon(vendorColors[vendor]);
+    }
+
+    function updateLegend() {
+      const legendDiv = document.getElementById("legend");
+      // Limpiar legend
+      legendDiv.innerHTML = "<strong>Vendedores</strong>";
+      for (const [vendor, color] of Object.entries(vendorColors)) {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        const colorBox = document.createElement("div");
+        colorBox.className = "legend-color";
+        colorBox.style.backgroundColor = color;
+        item.appendChild(colorBox);
+        const nameText = document.createElement("span");
+        nameText.textContent = vendor;
+        item.appendChild(nameText);
+        legendDiv.appendChild(item);
+      }
+      // Agregar WENDY y ALFREDO si no están en vendorColors
+      if (!vendorColors["WENDY"]) {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        const colorBox = document.createElement("div");
+        colorBox.className = "legend-color";
+        colorBox.style.backgroundColor = "violet";
+        item.appendChild(colorBox);
+        item.appendChild(document.createTextNode("WENDY"));
+        legendDiv.appendChild(item);
+      }
+      if (!vendorColors["ALFREDO"]) {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        const colorBox = document.createElement("div");
+        colorBox.className = "legend-color";
+        colorBox.style.backgroundColor = "green";
+        item.appendChild(colorBox);
+        item.appendChild(document.createTextNode("ALFREDO"));
+        legendDiv.appendChild(item);
       }
     }
 
@@ -60,18 +121,20 @@
             if (coords.length === 2) {
               const vendedor = row["NOMBRE VENDEDOR"].trim();
               const icon = getVendorIcon(vendedor);
-              const marker = L.marker(coords, { icon }).addTo(map);
-              marker.bindPopup(
-                `<b>Fecha:</b> ${row.FECHA}<br>
-                 <b>Vendedor:</b> ${vendedor}<br>
-                 <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
-                 <b>Giro:</b> ${row.GIRO}<br>
-                 <b>Motivo:</b> ${row.MOTIVO}<br>
-                 <b>Obs:</b> ${row.OBSERVACIONES}`
-              );
+              L.marker(coords, { icon })
+                .addTo(map)
+                .bindPopup(
+                  `<b>Fecha:</b> ${row.FECHA}<br>
+                   <b>Vendedor:</b> ${vendedor}<br>
+                   <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
+                   <b>Giro:</b> ${row.GIRO}<br>
+                   <b>Motivo:</b> ${row.MOTIVO}<br>
+                   <b>Obs:</b> ${row.OBSERVACIONES}`
+                );
             }
           }
         });
+        updateLegend();
         console.log("Colores asignados:", vendorColors);
       }
     });
