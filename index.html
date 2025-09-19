@@ -2,15 +2,13 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Mapa Vendedores y Prospectos</title>
+<title>Mapa Vendedores y Prospectos DENUE</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
 <style>
   html, body {height:100%; margin:0;}
   #map {height:100vh;}
-
-  /* Leyenda esquina inferior derecha */
   .legend {
     position: absolute;
     bottom: 10px;
@@ -25,20 +23,8 @@
     overflow-y: auto;
     z-index: 1000;
   }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 4px;
-  }
-  .legend-color {
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
-    border-radius: 50%;
-    border: 1px solid #00000050;
-  }
-
-  /* Buscador */
+  .legend-item { display: flex; align-items: center; margin-bottom: 4px; }
+  .legend-color { width:16px; height:16px; margin-right:6px; border-radius:50%; border:1px solid #00000050; }
   .buscador{
     position:absolute; top:10px; right:10px;
     background:white; padding:8px; border-radius:6px;
@@ -61,37 +47,34 @@
 </div>
 
 <script>
-// Inicializar mapa en Mazatlán
+// Inicializar mapa
 const map = L.map('map').setView([23.2329, -106.4062], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; OpenStreetMap contributors'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
 
 // Marcadores
 let marcadoresVendedores = [];
 let layerProspectos = L.layerGroup().addTo(map);
 
 // Colores vendedores
-const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
+const colorPalette = ["red","orange","yellow","blue","grey","black","gold"];
 const vendorColors = {};
-let colorIndex = 0;
+let colorIndex=0;
 
-// Crear icono tipo “marker clásico de Leaflet”
+// Icono tipo Leaflet
 function createColoredIcon(color){
   return L.icon({
     iconUrl:`https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
     shadowUrl:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    iconSize:[25,41],
-    iconAnchor:[12,41],
-    popupAnchor:[1,-34],
-    shadowSize:[41,41]
+    iconSize:[25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]
   });
 }
 
 function getVendorIcon(vendor){
-  const name = vendor.toUpperCase().trim();
+  const name=vendor.toUpperCase().trim();
   if(name==="WENDY") return createColoredIcon("violet");
   if(name==="ALFREDO") return createColoredIcon("green");
   if(!vendorColors[vendor]){
-    vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
+    vendorColors[vendor]=colorPalette[colorIndex%colorPalette.length];
     colorIndex++;
   }
   return createColoredIcon(vendorColors[vendor]);
@@ -99,122 +82,114 @@ function getVendorIcon(vendor){
 
 // Leyenda
 function updateLegend(visits){
-  const legendDiv = document.getElementById("legend");
-  legendDiv.innerHTML = "<strong>Vendedores</strong>";
-
-  const special = {"WENDY":"violet","ALFREDO":"green"};
+  const legendDiv=document.getElementById("legend");
+  legendDiv.innerHTML="<strong>Vendedores</strong>";
+  const special={"WENDY":"violet","ALFREDO":"green"};
   for(const [v,color] of Object.entries(special)){
-    const item = document.createElement("div");
+    const item=document.createElement("div");
     item.className="legend-item";
-    const colorBox = document.createElement("div");
+    const colorBox=document.createElement("div");
     colorBox.className="legend-color";
     colorBox.style.backgroundColor=color;
     item.appendChild(colorBox);
-    const count = visits[v] || {hoy:0,mes:0};
+    const count=visits[v]||{hoy:0,mes:0};
     item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
     legendDiv.appendChild(item);
   }
-
   for(const [v,color] of Object.entries(vendorColors)){
     if(v.toUpperCase()==="WENDY"||v.toUpperCase()==="ALFREDO") continue;
-    const item = document.createElement("div");
+    const item=document.createElement("div");
     item.className="legend-item";
-    const colorBox = document.createElement("div");
+    const colorBox=document.createElement("div");
     colorBox.className="legend-color";
     colorBox.style.backgroundColor=color;
     item.appendChild(colorBox);
-    const count = visits[v] || {hoy:0,mes:0};
+    const count=visits[v]||{hoy:0,mes:0};
     item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
     legendDiv.appendChild(item);
   }
 }
 
-// Parseo robusto de fechas
+// Parseo fechas
 function parseFechaCSV(fechaStr){
   if(!fechaStr) return null;
-  fechaStr = fechaStr.trim();
-  const [fecha] = fechaStr.split(' ');
+  fechaStr=fechaStr.trim();
+  const [fecha]=fechaStr.split(' ');
   if(!fecha) return null;
-  const parts = fecha.split('/').map(p=>parseInt(p,10));
+  const parts=fecha.split('/').map(p=>parseInt(p,10));
   if(parts.length!==3) return null;
-  const [mes,dia,anio] = parts;
+  const [mes,dia,anio]=parts;
   return {dia,mes,anio};
 }
 
-const hoy = new Date();
-const diaHoy = hoy.getDate();
-const mesHoy = hoy.getMonth()+1;
-const anioHoy = hoy.getFullYear();
+const hoy=new Date(), diaHoy=hoy.getDate(), mesHoy=hoy.getMonth()+1, anioHoy=hoy.getFullYear();
 
-// Cargar CSV de vendedores
+// Cargar CSV vendedores
 Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv",{
-  download:true,
-  header:true,
+  download:true, header:true,
   complete:function(results){
     const visits={};
     marcadoresVendedores.forEach(m=>map.removeLayer(m));
     marcadoresVendedores=[];
-
     results.data.forEach(row=>{
-      if(!row.COORDENADAS || !row["NOMBRE VENDEDOR"] || !row.FECHA) return;
-      const coords = row.COORDENADAS.split(',').map(Number);
+      if(!row.COORDENADAS||!row["NOMBRE VENDEDOR"]||!row.FECHA) return;
+      const coords=row.COORDENADAS.split(',').map(Number);
       if(coords.length!==2) return;
       const vendedor=row["NOMBRE VENDEDOR"].trim();
       const icon=getVendorIcon(vendedor);
-
-      const marker = L.marker(coords,{icon}).addTo(map)
-        .bindPopup(`<b>Fecha:</b> ${row.FECHA}<br>
-                    <b>Vendedor:</b> ${vendedor}<br>
-                    <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
-                    <b>Giro:</b> ${row.GIRO}<br>
-                    <b>Motivo:</b> ${row.MOTIVO}<br>
-                    <b>Obs:</b> ${row.OBSERVACIONES}`);
+      const marker=L.marker(coords,{icon}).addTo(map)
+        .bindPopup(`<b>Fecha:</b>${row.FECHA}<br><b>Vendedor:</b>${vendedor}<br>
+                    <b>Cliente:</b>${row["NOMBRE CLIENTE"]}<br>
+                    <b>Giro:</b>${row.GIRO}<br>
+                    <b>Motivo:</b>${row.MOTIVO}<br>
+                    <b>Obs:</b>${row.OBSERVACIONES}`);
       marcadoresVendedores.push(marker);
-
       if(!visits[vendedor]) visits[vendedor]={hoy:0,mes:0};
       const fechaCelda=parseFechaCSV(row.FECHA);
       if(!fechaCelda) return;
       if(fechaCelda.dia===diaHoy && fechaCelda.mes===mesHoy && fechaCelda.anio===anioHoy) visits[vendedor].hoy++;
       if(fechaCelda.mes===mesHoy && fechaCelda.anio===anioHoy) visits[vendedor].mes++;
     });
-
     updateLegend(visits);
   }
 });
 
-// Función para centrar vendedor
-function centrarVendedor(nombre){
-  const puntos=[];
-  marcadoresVendedores.forEach(m=>{
-    if(m.getPopup().getContent().includes(nombre)) puntos.push(m.getLatLng());
-  });
-  if(puntos.length>0) map.fitBounds(L.latLngBounds(puntos));
-}
-
-// Buscador de giros (prospectos)
+// Icono estrella dorada
 function estrellaIcon(){
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="gold" stroke="orange" stroke-width="1"/>
+  <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="gold" stroke="orange" stroke-width="1"/>
   </svg>`;
   return L.divIcon({html:`<div style="width:24px;height:24px;">${svg}</div>`,className:'',iconSize:[24,24],iconAnchor:[12,24]});
 }
 
-document.getElementById("buscarGiro").onclick=()=>{
-  const valor=document.getElementById("buscadorGiro").value.toLowerCase().trim();
-  if(!valor) return;
+// Función búsqueda DENUE
+async function buscarGiroDENUE(giro){
   layerProspectos.clearLayers();
-  
-  // Simulación de puntos prospecto alrededor de Mazatlán
-  const ejemplo=[[23.25,-106.42],[23.27,-106.44],[23.23,-106.46]];
-  ejemplo.forEach(p=>{
-    L.marker(p,{icon:estrellaIcon()}).addTo(layerProspectos).bindPopup(`<b>${valor}</b>`);
-  });
-};
+  if(!giro) return;
+  const bounds=map.getBounds();
+  const minLat=bounds.getSouth(), maxLat=bounds.getNorth();
+  const minLon=bounds.getWest(), maxLon=bounds.getEast();
 
-document.getElementById("limpiarGiro").onclick=()=>{
-  layerProspectos.clearLayers();
-  document.getElementById("buscadorGiro").value="";
-};
+  const token="9a61f789-3f11-4b4f-8aab-83d770c471f9";
+  const url=`https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(giro)}?type=json&token=${token}&lat1=${minLat}&lat2=${maxLat}&lon1=${minLon}&lon2=${maxLon}`;
+
+  try{
+    const res=await fetch(url);
+    const data=await res.json();
+    if(!data || !data.data) return;
+    data.data.forEach(item=>{
+      if(item.Latitud && item.Longitud){
+        L.marker([item.Latitud,item.Longitud],{icon:estrellaIcon()})
+         .addTo(layerProspectos)
+         .bindPopup(`<b>${item.Nombre}</b><br>${item.Giro}<br>${item.Direccion}`);
+      }
+    });
+  }catch(err){ console.error("Error DENUE:",err); }
+}
+
+// Botones
+document.getElementById("buscarGiro").onclick=()=>{ const valor=document.getElementById("buscadorGiro").value.trim(); buscarGiroDENUE(valor); };
+document.getElementById("limpiarGiro").onclick=()=>{ layerProspectos.clearLayers(); document.getElementById("buscadorGiro").value=""; };
 </script>
 </body>
 </html>
