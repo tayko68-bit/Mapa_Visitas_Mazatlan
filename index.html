@@ -6,22 +6,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
-html, body {height:100%; margin:0; font-family:sans-serif;}
+html, body {height:100%; margin:0;}
 #map { height:100vh; }
 
-/* Estilos para pantallas grandes (desktop) */
 #leyenda {
   position:absolute;
   bottom:10px; right:10px;
   background:white;
   padding:10px;
   border-radius:6px;
+  font-family:sans-serif;
   font-size:13px;
   box-shadow:0 2px 6px rgba(0,0,0,0.3);
   max-height:40vh;
   overflow-y:auto;
   min-width:140px;
-  z-index:1000;
 }
 #leyenda h3{margin:0 0 5px 0;font-size:14px;}
 #leyenda ul{list-style:none;padding:0;margin:0;}
@@ -30,42 +29,14 @@ html, body {height:100%; margin:0; font-family:sans-serif;}
 .buscador {
   position:absolute; top:10px; right:10px;
   background:white; padding:8px; border-radius:6px;
-  font-size:13px;
+  font-family:sans-serif; font-size:13px;
   box-shadow:0 2px 6px rgba(0,0,0,0.25);
   display:flex; gap:6px; align-items:center;
-  z-index:1000;
 }
 .buscador input { width:150px; padding:6px; }
 .buscador button { padding:6px 8px; cursor:pointer; }
 .buscador label { font-size:12px; display:flex; align-items:center; gap:3px; }
 .result-count { font-size:12px; color:#333; margin-left:8px; }
-
-/* Media query para pantallas más pequeñas (móviles) */
-@media (max-width: 768px) {
-  body {
-    display: flex;
-    flex-direction: column;
-  }
-  #map {
-    height: 60vh; /* El mapa ocupa una parte de la pantalla */
-    flex-grow: 1;
-  }
-  .buscador, #leyenda {
-    position: relative;
-    top: unset;
-    right: unset;
-    margin: 10px;
-  }
-  .buscador {
-    flex-direction: column;
-    align-items: stretch;
-    width: auto;
-  }
-  .buscador input, .buscador button, .buscador label {
-    width: 100%;
-    box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
-  }
-}
 </style>
 </head>
 <body>
