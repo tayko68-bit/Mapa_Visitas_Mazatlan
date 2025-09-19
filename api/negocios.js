@@ -1,37 +1,44 @@
-// api/negocios.js
-
+// File: api/negocios.js
+import fetch from "node-fetch";
 
 export default async function handler(req, res) {
   try {
-    const { giro, lat1, lon1, lat2, lon2 } = req.query;
+    const { giro, lat1, lat2, lon1, lon2 } = req.query;
+    const token = "9a61f789-3f11-4b4f-8aab-83d770c471f9"; // tu token DENUE
 
     if (!giro || !lat1 || !lat2 || !lon1 || !lon2) {
-      return res.status(400).json({ error: "Faltan parámetros" });
+      return res.status(400).json({ error: "Parámetros incompletos" });
     }
 
-    const token = process.env.DENUE_API_KEY;
-    if (!token) {
-      return res.status(500).json({ error: "No se encontró la variable DENUE_API_KEY" });
-    }
+    // Normalizar el giro para la URL
+    const giroEncoded = encodeURIComponent(giro.toUpperCase().trim());
 
-    // Construye la URL para el DENUE
-    const url = `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(
-      giro
-    )}?type=json&token=${token}&lat1=${lat1}&lat2=${lat2}&lon1=${lon1}&lon2=${lon2}`;
+    const url = `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${giroEncoded}?type=json&token=${token}&lat1=${lat1}&lat2=${lat2}&lon1=${lon1}&lon2=${lon2}`;
 
-    // Llamada a la API
     const response = await fetch(url);
 
+    // Validar que la respuesta sea JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      return res.status(500).json({
+        error: "DENUE no devolvió JSON",
+        details: text.slice(0, 300) // mostrar solo los primeros 300 caracteres
+      });
+    }
+
     if (!response.ok) {
-      return res.status(response.status).json({ error: `DENUE responded with status ${response.status}` });
+      return res.status(response.status).json({
+        error: "Error en la API DENUE",
+        status: response.status,
+        statusText: response.statusText
+      });
     }
 
     const data = await response.json();
-
-    // Retorna los datos tal cual
     res.status(200).json(data);
-  } catch (error) {
-    console.error("Error proxy DENUE:", error);
-    res.status(500).json({ error: "fetch failed", details: error.message });
+  } catch (err) {
+    console.error("Error DENUE:", err);
+    res.status(500).json({ error: "Error al consultar DENUE", details: err.message });
   }
 }
