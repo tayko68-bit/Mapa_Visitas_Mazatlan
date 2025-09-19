@@ -1,172 +1,242 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Mapa de Vendedores con Leyenda y Contadores</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
-  <style>
-    #map { height: 100vh; }
+<meta charset="utf-8"/>
+<title>Mapa Vendedores + Prospectos</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+html, body {height:100%; margin:0;}
+#map { height:100vh; }
 
-    /* Leyenda esquina inferior derecha */
-    .legend {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      background: rgba(255,255,255,0.95);
-      padding: 10px;
-      border-radius: 6px;
-      font-family: sans-serif;
-      font-size: 14px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      max-height: 90vh;
-      overflow-y: auto;
-      z-index: 1000;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-    .legend-color {
-      width: 16px;
-      height: 16px;
-      margin-right: 6px;
-      border-radius: 50%;
-      border: 1px solid #00000050;
-    }
-  </style>
+#leyenda {
+  position:absolute;
+  bottom:10px; right:10px;
+  background:white;
+  padding:10px;
+  border-radius:6px;
+  font-family:sans-serif;
+  font-size:13px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  max-height:40vh;
+  overflow-y:auto;
+  min-width:140px;
+}
+#leyenda h3{margin:0 0 5px 0;font-size:14px;}
+#leyenda ul{list-style:none;padding:0;margin:0;}
+#leyenda li{margin:3px 0;cursor:pointer;}
+
+.buscador {
+  position:absolute; top:10px; right:10px;
+  background:white; padding:8px; border-radius:6px;
+  font-family:sans-serif; font-size:13px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.25);
+  display:flex; gap:6px; align-items:center;
+}
+.buscador input { width:150px; padding:6px; }
+.buscador button { padding:6px 8px; cursor:pointer; }
+.buscador label { font-size:12px; display:flex; align-items:center; gap:3px; }
+.result-count { font-size:12px; color:#333; margin-left:8px; }
+</style>
 </head>
 <body>
 <div id="map"></div>
-<div class="legend" id="legend"><strong>Vendedores</strong></div>
+<div id="leyenda"><h3>Vendedores</h3><ul id="listaVendedores"></ul></div>
+<div class="buscador">
+  <input id="denueInput" placeholder="Ej: ferretería, taller..."/>
+  <button id="denueBuscar">Buscar</button>
+  <button id="denueClear">Limpiar</button>
+  <label><input type="checkbox" id="zoneCheckbox" checked/> Zona visible</label>
+  <span class="result-count" id="denueCount"></span>
+</div>
 
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-const map = L.map('map').setView([23.2329, -106.4062], 12);
+/*******************************
+ * CONFIG
+ *******************************/
+const urlCSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
+const DENUE_TOKEN = "9a61f789-3f11-4b4f-8aab-83d770c471f9";
+let map = L.map('map').setView([23.25, -106.42], 13); // Mazatlán
+let marcadoresVendedores = [];
+let denueMarkers = [];
+let vendedoresColores = {};
+let colorPool = ['violet','green','orange','red','blue','brown','darkcyan','gold','magenta','darkgreen','darkorange','darkred'];
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+/*******************************
+ * MAPA Y TILE
+ *******************************/
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
-const vendorColors = {};
-let colorIndex = 0;
-
-function createColoredIcon(color) {
-  return L.icon({
-    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+/*******************************
+ * ICONOS
+ *******************************/
+function createVendedorIcon(color){
+  return L.divIcon({
+    className:"vendedor-marker",
+    html:`<div style="width:16px;height:16px;background:${color};border-radius:50%;border:1px solid #333;"></div>`,
+    iconSize:[16,16], iconAnchor:[8,8]
   });
 }
 
-function getVendorIcon(vendor) {
-  const name = vendor.toUpperCase().trim();
-  if (name === "WENDY") return createColoredIcon("violet");
-  if (name === "ALFREDO") return createColoredIcon("green");
-  if (!vendorColors[vendor]) {
-    vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
-    colorIndex++;
-  }
-  return createColoredIcon(vendorColors[vendor]);
+function starIcon(color="#FFD54F"){
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='36' height='36'>
+    <polygon fill='${color}' stroke='#444' stroke-width='1' points='12,2 15,9 22,9 16.5,13.5 18.5,21 12,17 5.5,21 7.5,13.5 2,9 9,9'/>
+  </svg>`;
+  return L.icon({iconUrl:'data:image/svg+xml;utf8,'+encodeURIComponent(svg),iconSize:[36,36],iconAnchor:[18,18]});
 }
 
-function updateLegend(visits) {
-  const legendDiv = document.getElementById("legend");
-  legendDiv.innerHTML = "<strong>Vendedores</strong>";
-
-  const special = {"WENDY":"violet","ALFREDO":"green"};
-  for (const [v, color] of Object.entries(special)) {
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    const colorBox = document.createElement("div");
-    colorBox.className = "legend-color";
-    colorBox.style.backgroundColor = color;
-    item.appendChild(colorBox);
-    const count = visits[v] || {hoy:0, mes:0};
-    item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
-    legendDiv.appendChild(item);
-  }
-
-  for (const [v, color] of Object.entries(vendorColors)) {
-    if (v.toUpperCase() === "WENDY" || v.toUpperCase() === "ALFREDO") continue;
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    const colorBox = document.createElement("div");
-    colorBox.className = "legend-color";
-    colorBox.style.backgroundColor = color;
-    item.appendChild(colorBox);
-    const count = visits[v] || {hoy:0, mes:0};
-    item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
-    legendDiv.appendChild(item);
-  }
+/*******************************
+ * FUNCIONES VENDEDOR
+ *******************************/
+function cargarVendedores(){
+  Papa.parse(urlCSV,{
+    download:true, header:true,
+    complete:function(results){
+      actualizarVendedores(results.data);
+    }
+  });
 }
 
-// Parseo robusto de fechas M/D/YYYY H:MM:SS
-function parseFechaCSV(fechaStr) {
-  if (!fechaStr) return null;
-  fechaStr = fechaStr.trim();
-  const [fecha] = fechaStr.split(' ');
-  if (!fecha) return null;
-  const parts = fecha.split('/').map(p => parseInt(p, 10));
-  if (parts.length !== 3) return null;
-  const [mes, dia, anio] = parts;
-  return { dia, mes, anio }; 
+function actualizarVendedores(datos){
+  marcadoresVendedores.forEach(m=>map.removeLayer(m));
+  marcadoresVendedores=[];
+  let hoy = new Date().toISOString().slice(0,10);
+  let mesActual = hoy.slice(0,7);
+  let conteo={};
+  let vendedoresUnicos = new Set();
+
+  datos.forEach(fila=>{
+    if(!fila["COORDENADAS"] || !fila["NOMBRE VENDEDOR"]) return;
+    let [lat,lng] = fila["COORDENADAS"].split(",");
+    let vendedor = fila["NOMBRE VENDEDOR"].trim();
+    vendedoresUnicos.add(vendedor);
+
+    // asignar color
+    if(!vendedoresColores[vendedor]){
+      if(vendedor.toLowerCase()=="wendy") vendedoresColores[vendedor]="violet";
+      else if(vendedor.toLowerCase()=="alfredo") vendedoresColores[vendedor]="green";
+      else vendedoresColores[vendedor]=colorPool.shift()||"blue";
+    }
+
+    // conteo visitas
+    let fecha = new Date(fila["FECHA"]);
+    if(!conteo[vendedor]) conteo[vendedor]={hoy:0,mes:0};
+    if(fecha.toISOString().slice(0,10)===hoy) conteo[vendedor].hoy++;
+    if(fila["FECHA"].startsWith(mesActual)) conteo[vendedor].mes++;
+
+    // icono
+    let icon = createVendedorIcon(vendedoresColores[vendedor]);
+    let m = L.marker([parseFloat(lat),parseFloat(lng)],{icon}).bindPopup(
+      `<b>${vendedor}</b><br>${fila["NOMBRE CLIENTE"]||""}<br>${fila["GIRO"]||""}<br>${fila["MOTIVO"]||""}<br>${fila["OBSERVACIONES"]||""}`
+    ).addTo(map);
+    marcadoresVendedores.push(m);
+  });
+
+  construirLeyenda(conteo,vendedoresUnicos);
 }
 
-const hoy = new Date();
-const diaHoy = hoy.getDate();
-const mesHoy = hoy.getMonth() + 1;
-const anioHoy = hoy.getFullYear();
+function construirLeyenda(conteo,vendedoresUnicos){
+  let lista = document.getElementById("listaVendedores");
+  lista.innerHTML="";
+  vendedoresUnicos.forEach(v=>{
+    let stats = conteo[v] || {hoy:0, mes:0};
+    let li = document.createElement("li");
+    li.innerHTML=`<span style="display:inline-block;width:12px;height:12px;background:${vendedoresColores[v]};margin-right:5px;"></span> ${v} ${stats.hoy}/${stats.mes}`;
+    li.onclick=()=>centrarVendedor(v);
+    lista.appendChild(li);
+  });
+}
 
-// Cargar CSV
-Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
-  download: true,
-  header: true,
-  complete: function(results) {
-    const visits = {}; // contador por vendedor
+function centrarVendedor(nombre){
+  let puntos=[];
+  marcadoresVendedores.forEach(m=>{
+    if(m.getPopup().getContent().includes(nombre)) puntos.push(m.getLatLng());
+  });
+  if(puntos.length>0) map.fitBounds(L.latLngBounds(puntos));
+}
 
-    results.data.forEach(row => {
-      // <-- FILTRO ROBUSTO: ignorar filas vacías o incompletas
-      if (!row.COORDENADAS || !row["NOMBRE VENDEDOR"] || !row.FECHA) return;
+/*******************************
+ * DENUE
+ *******************************/
+let municipiosGeoJSON=null;
+fetch('https://raw.githubusercontent.com/angelnmara/geojson/main/municipios.geojson')
+  .then(res=>res.json())
+  .then(data=>{ municipiosGeoJSON=data; });
 
-      const coords = row.COORDENADAS.split(',').map(Number);
-      if (coords.length !== 2) return; // coordenadas inválidas
+function clearDenue(){ denueMarkers.forEach(m=>map.removeLayer(m)); denueMarkers=[]; document.getElementById("denueCount").textContent=''; }
 
-      const vendedor = row["NOMBRE VENDEDOR"].trim();
-      const icon = getVendorIcon(vendedor);
+function getMunicipioBBox(center){
+  if(!municipiosGeoJSON) return null;
+  for(const f of municipiosGeoJSON.features){
+    const layer=L.geoJSON(f);
+    if(layer.getBounds().contains(center)) return layer.getBounds();
+  }
+  return null;
+}
 
-      // Agregar marcador
-      L.marker(coords, { icon })
-        .addTo(map)
-        .bindPopup(
-          `<b>Fecha:</b> ${row.FECHA}<br>
-           <b>Vendedor:</b> ${vendedor}<br>
-           <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
-           <b>Giro:</b> ${row.GIRO}<br>
-           <b>Motivo:</b> ${row.MOTIVO}<br>
-           <b>Obs:</b> ${row.OBSERVACIONES}`
-        );
+function buildDenueUrl(text,bbox,page=1,limit=2000){
+  const bboxStr=`${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`;
+  return `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(text)}/${bboxStr}/${page}/${limit}?token=${DENUE_TOKEN}`;
+}
 
-      if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
+async function handleDenueSearch(){
+  clearDenue();
+  const giro=document.getElementById('denueInput').value.trim();
+  const countEl=document.getElementById('denueCount');
+  countEl.textContent='Buscando...';
+  if(!giro){ countEl.textContent='Introduce un giro'; return; }
 
-      const fechaCelda = parseFechaCSV(row.FECHA);
-      if (!fechaCelda) return;
+  let bbox;
+  const useVisible=document.getElementById('zoneCheckbox').checked;
+  if(useVisible){
+    const b=map.getBounds();
+    const sw=b.getSouthWest(), ne=b.getNorthEast();
+    bbox=[sw.lat, sw.lng, ne.lat, ne.lng];
+  } else {
+    const center=map.getCenter();
+    const municipioBounds=getMunicipioBBox(center);
+    if(!municipioBounds){ countEl.textContent='No se pudo detectar municipio.'; return; }
+    const sw=municipioBounds.getSouthWest(), ne=municipioBounds.getNorthEast();
+    bbox=[sw.lat, sw.lng, ne.lat, ne.lng];
+  }
 
-      // Contar visitas
-      if (fechaCelda.dia === diaHoy && fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].hoy++;
-      if (fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].mes++;
+  try{
+    const url=buildDenueUrl(giro,bbox,1,2000);
+    const res=await fetch(url);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    if(!Array.isArray(data) || data.length===0){ countEl.textContent='No se encontraron resultados.'; return; }
+
+    const latlngs=[];
+    data.forEach(el=>{
+      const lat=parseFloat(el.Latitud||0), lon=parseFloat(el.Longitud||0);
+      if(!isFinite(lat)||!isFinite(lon)) return;
+      const popupHtml=`<b>${el.Nombre||'Sin nombre'}</b><br>${el.Calle||''} ${el.Num_Exterior||''}<br>${el.Colonia||''} ${el.Municipio||''}<br><b>Giro:</b> ${el.Clase_actividad||giro}`;
+      const m=L.marker([lat,lon],{icon:starIcon()}).bindPopup(popupHtml).addTo(map);
+      denueMarkers.push(m);
+      latlngs.push([lat,lon]);
     });
 
-    updateLegend(visits);
-    console.log("Colores asignados:", vendorColors);
-    console.log("Visitas:", visits);
-  }
-});
+    if(latlngs.length>0 && !useVisible){ map.fitBounds(L.latLngBounds(latlngs).pad(0.15)); }
+    countEl.textContent=`${denueMarkers.length} prospecto(s) encontrados.`;
+  }catch(err){ console.error("Error DENUE:",err); countEl.textContent='Error en consulta DENUE'; }
+}
+
+/*******************************
+ * EVENTOS
+ *******************************/
+document.getElementById('denueBuscar').onclick=handleDenueSearch;
+document.getElementById('denueClear').onclick=clearDenue;
+
+/*******************************
+ * INICIAL
+ *******************************/
+cargarVendedores();
+setInterval(cargarVendedores,60000); // refresco cada minuto
 </script>
 </body>
 </html>
