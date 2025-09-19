@@ -106,16 +106,16 @@ function updateLegend(visits) {
   }
 }
 
-// Obtener fechas del día y del mes
-const hoy = new Date().toISOString().slice(0,10); // YYYY-MM-DD
-const mesActual = hoy.slice(0,7); // YYYY-MM
-
 // Cargar CSV
 Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
   download: true,
   header: true,
   complete: function(results) {
     const visits = {}; // contador por vendedor
+    const today = new Date();
+    const mesActual = today.getMonth();
+    const anioActual = today.getFullYear();
+
     results.data.forEach(row => {
       if (row.COORDENADAS) {
         const coords = row.COORDENADAS.split(',').map(Number);
@@ -133,10 +133,17 @@ Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P
                <b>Obs:</b> ${row.OBSERVACIONES}`
             );
 
-          // Contadores
+          // Inicializar contador si no existe
           if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
-          if (row.FECHA === hoy) visits[vendedor].hoy++;
-          if (row.FECHA.startsWith(mesActual)) visits[vendedor].mes++;
+
+          // Parsear la fecha de la celda
+          const fechaCelda = new Date(row.FECHA);
+
+          // Contar visitas del día
+          if (fechaCelda.toDateString() === today.toDateString()) visits[vendedor].hoy++;
+
+          // Contar visitas del mes
+          if (fechaCelda.getFullYear() === anioActual && fechaCelda.getMonth() === mesActual) visits[vendedor].mes++;
         }
       }
     });
