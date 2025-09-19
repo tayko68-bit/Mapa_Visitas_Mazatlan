@@ -106,17 +106,21 @@ function updateLegend(visits) {
   }
 }
 
-// Función para parsear fechas M/D/YYYY H:MM:SS sin depender de Date
+// Parseo robusto de fechas M/D/YYYY H:MM:SS
 function parseFechaCSV(fechaStr) {
+  if (!fechaStr) return null;
+  fechaStr = fechaStr.trim();              // eliminar espacios
   const [fecha, hora] = fechaStr.split(' ');
-  const [mes, dia, anio] = fecha.split('/').map(Number);
-  return { dia, mes, anio }; // ignoramos la hora para los contadores
+  if (!fecha) return null;
+  const parts = fecha.split('/').map(p => parseInt(p, 10));
+  if (parts.length !== 3) return null;
+  const [mes, dia, anio] = parts;
+  return { dia, mes, anio }; 
 }
 
-// Fecha de hoy y mes actual
 const hoy = new Date();
 const diaHoy = hoy.getDate();
-const mesHoy = hoy.getMonth() + 1; // JS meses 0-11
+const mesHoy = hoy.getMonth() + 1;
 const anioHoy = hoy.getFullYear();
 
 // Cargar CSV
@@ -146,11 +150,12 @@ Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P
           if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
 
           const fechaCelda = parseFechaCSV(row.FECHA);
+          if (!fechaCelda) return;
 
-          // Contar visitas del día
+          // Visitas del día
           if (fechaCelda.dia === diaHoy && fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].hoy++;
 
-          // Contar visitas del mes
+          // Visitas del mes
           if (fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].mes++;
         }
       }
