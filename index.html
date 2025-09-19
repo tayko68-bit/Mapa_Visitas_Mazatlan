@@ -109,8 +109,8 @@ function updateLegend(visits) {
 // Parseo robusto de fechas M/D/YYYY H:MM:SS
 function parseFechaCSV(fechaStr) {
   if (!fechaStr) return null;
-  fechaStr = fechaStr.trim();              // eliminar espacios
-  const [fecha, hora] = fechaStr.split(' ');
+  fechaStr = fechaStr.trim();
+  const [fecha] = fechaStr.split(' ');
   if (!fecha) return null;
   const parts = fecha.split('/').map(p => parseInt(p, 10));
   if (parts.length !== 3) return null;
@@ -131,35 +131,37 @@ Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P
     const visits = {}; // contador por vendedor
 
     results.data.forEach(row => {
-      if (row.COORDENADAS) {
-        const coords = row.COORDENADAS.split(',').map(Number);
-        if (coords.length === 2) {
-          const vendedor = row["NOMBRE VENDEDOR"].trim();
-          const icon = getVendorIcon(vendedor);
-          L.marker(coords, { icon })
-            .addTo(map)
-            .bindPopup(
-              `<b>Fecha:</b> ${row.FECHA}<br>
-               <b>Vendedor:</b> ${vendedor}<br>
-               <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
-               <b>Giro:</b> ${row.GIRO}<br>
-               <b>Motivo:</b> ${row.MOTIVO}<br>
-               <b>Obs:</b> ${row.OBSERVACIONES}`
-            );
+      // <-- FILTRO ROBUSTO: ignorar filas vacías o incompletas
+      if (!row.COORDENADAS || !row["NOMBRE VENDEDOR"] || !row.FECHA) return;
 
-          if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
+      const coords = row.COORDENADAS.split(',').map(Number);
+      if (coords.length !== 2) return; // coordenadas inválidas
 
-          const fechaCelda = parseFechaCSV(row.FECHA);
-          if (!fechaCelda) return;
+      const vendedor = row["NOMBRE VENDEDOR"].trim();
+      const icon = getVendorIcon(vendedor);
 
-          // Visitas del día
-          if (fechaCelda.dia === diaHoy && fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].hoy++;
+      // Agregar marcador
+      L.marker(coords, { icon })
+        .addTo(map)
+        .bindPopup(
+          `<b>Fecha:</b> ${row.FECHA}<br>
+           <b>Vendedor:</b> ${vendedor}<br>
+           <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
+           <b>Giro:</b> ${row.GIRO}<br>
+           <b>Motivo:</b> ${row.MOTIVO}<br>
+           <b>Obs:</b> ${row.OBSERVACIONES}`
+        );
 
-          // Visitas del mes
-          if (fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].mes++;
-        }
-      }
+      if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
+
+      const fechaCelda = parseFechaCSV(row.FECHA);
+      if (!fechaCelda) return;
+
+      // Contar visitas
+      if (fechaCelda.dia === diaHoy && fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].hoy++;
+      if (fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].mes++;
     });
+
     updateLegend(visits);
     console.log("Colores asignados:", vendorColors);
     console.log("Visitas:", visits);
