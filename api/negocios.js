@@ -1,43 +1,37 @@
 // api/negocios.js
+import fetch from "node-fetch";
+
 export default async function handler(req, res) {
   try {
-    const { giro, lat1, lon1, lat2, lon2, page = 1, limit = 2000 } = req.query;
+    const { giro, lat1, lon1, lat2, lon2 } = req.query;
 
-    if (!giro) {
-      return res.status(400).json({ error: "Falta parámetro ?giro=" });
+    if (!giro || !lat1 || !lat2 || !lon1 || !lon2) {
+      return res.status(400).json({ error: "Faltan parámetros" });
     }
 
-    // Token en variable de entorno (NO lo pongas hardcodeado en el archivo)
     const token = process.env.DENUE_API_KEY;
     if (!token) {
-      return res.status(500).json({ error: "No hay DENUE_API_KEY configurada en env" });
+      return res.status(500).json({ error: "No se encontró la variable DENUE_API_KEY" });
     }
 
-    // Validar bbox si vienen los 4 parámetros, si no, hacer una búsqueda sin bbox
-    let denueUrl;
-    if (lat1 && lon1 && lat2 && lon2) {
-      // Formato: lat1,lon1,lat2,lon2
-      denueUrl = `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(giro)}/${lat1},${lon1},${lat2},${lon2}/${page}/${limit}?token=${token}`;
-    } else {
-      // Si no hay bbox, hacer búsqueda por texto (puede devolver mucha info)
-      denueUrl = `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(giro)}/${page}/${limit}?token=${token}`;
+    // Construye la URL para el DENUE
+    const url = `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(
+      giro
+    )}?type=json&token=${token}&lat1=${lat1}&lat2=${lat2}&lon1=${lon1}&lon2=${lon2}`;
+
+    // Llamada a la API
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `DENUE responded with status ${response.status}` });
     }
 
-    const resp = await fetch(denueUrl);
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      return res.status(resp.status).json({ error: "DENUE error", statusText: resp.statusText, body: text });
-    }
-    const data = await resp.json();
+    const data = await response.json();
 
-    // Cabeceras CORS para que el frontend (GitHub Pages) pueda consumirlo
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-    return res.status(200).json(data);
-  } catch (err) {
-    console.error("error proxy denue:", err);
-    return res.status(500).json({ error: err.message });
+    // Retorna los datos tal cual
+    res.status(200).json(data);
+  } catch (error) {
+    console.error("Error proxy DENUE:", error);
+    res.status(500).json({ error: "fetch failed", details: error.message });
   }
 }
