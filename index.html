@@ -106,13 +106,18 @@ function updateLegend(visits) {
   }
 }
 
-// Función para parsear fechas en formato M/D/YYYY H:MM:SS
-function parseFecha(fechaStr) {
+// Función para parsear fechas M/D/YYYY H:MM:SS sin depender de Date
+function parseFechaCSV(fechaStr) {
   const [fecha, hora] = fechaStr.split(' ');
   const [mes, dia, anio] = fecha.split('/').map(Number);
-  const [h, m, s] = hora.split(':').map(Number);
-  return new Date(anio, mes-1, dia, h, m, s); // mes-1 porque JS cuenta meses desde 0
+  return { dia, mes, anio }; // ignoramos la hora para los contadores
 }
+
+// Fecha de hoy y mes actual
+const hoy = new Date();
+const diaHoy = hoy.getDate();
+const mesHoy = hoy.getMonth() + 1; // JS meses 0-11
+const anioHoy = hoy.getFullYear();
 
 // Cargar CSV
 Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
@@ -120,9 +125,6 @@ Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P
   header: true,
   complete: function(results) {
     const visits = {}; // contador por vendedor
-    const today = new Date();
-    const mesActual = today.getMonth();
-    const anioActual = today.getFullYear();
 
     results.data.forEach(row => {
       if (row.COORDENADAS) {
@@ -141,17 +143,15 @@ Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P
                <b>Obs:</b> ${row.OBSERVACIONES}`
             );
 
-          // Inicializar contador si no existe
           if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
 
-          // Parsear la fecha correctamente
-          const fechaCelda = parseFecha(row.FECHA);
+          const fechaCelda = parseFechaCSV(row.FECHA);
 
           // Contar visitas del día
-          if (fechaCelda.toDateString() === today.toDateString()) visits[vendedor].hoy++;
+          if (fechaCelda.dia === diaHoy && fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].hoy++;
 
           // Contar visitas del mes
-          if (fechaCelda.getFullYear() === anioActual && fechaCelda.getMonth() === mesActual) visits[vendedor].mes++;
+          if (fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].mes++;
         }
       }
     });
