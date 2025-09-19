@@ -1,123 +1,188 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8"/>
+<meta charset="utf-8" />
 <title>Mapa Vendedores y Prospectos</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
 <style>
-html, body {height:100%; margin:0;}
-#map {height:100vh;}
+  html, body {height:100%; margin:0;}
+  #map {height:100vh;}
 
-#leyenda{
-  position:absolute;
-  bottom:10px; right:10px;
-  background:white;
-  padding:10px;
-  border-radius:6px;
-  font-family:sans-serif;
-  font-size:13px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.3);
-  max-height:40vh;
-  overflow-y:auto;
-  min-width:150px;
-  z-index:1000;
-}
-#leyenda h3{margin:0 0 5px 0;font-size:14px;}
-#leyenda ul{list-style:none;padding:0;margin:0;}
-#leyenda li{margin:3px 0;cursor:pointer;}
+  /* Leyenda esquina inferior derecha */
+  .legend {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(255,255,255,0.95);
+    padding: 10px;
+    border-radius: 6px;
+    font-family: sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 1000;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .legend-color {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    border-radius: 50%;
+    border: 1px solid #00000050;
+  }
 
-.buscador{
-  position:absolute; top:10px; right:10px;
-  background:white; padding:8px; border-radius:6px;
-  font-family:sans-serif; font-size:13px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.25);
-  display:flex; gap:6px; align-items:center;
-  z-index:1000;
-}
-.buscador input{width:180px; padding:6px;}
-.buscador button{padding:6px 8px; cursor:pointer;}
+  /* Buscador */
+  .buscador{
+    position:absolute; top:10px; right:10px;
+    background:white; padding:8px; border-radius:6px;
+    font-family:sans-serif; font-size:13px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    display:flex; gap:6px; align-items:center;
+    z-index:1000;
+  }
+  .buscador input{width:180px; padding:6px;}
+  .buscador button{padding:6px 8px; cursor:pointer;}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="leyenda"><h3>Vendedores</h3><ul id="listaVendedores"></ul></div>
+<div class="legend" id="legend"><strong>Vendedores</strong></div>
 <div class="buscador">
   <input id="buscadorGiro" placeholder="Buscar giro de negocio..."/>
   <button id="buscarGiro">Buscar</button>
   <button id="limpiarGiro">Limpiar</button>
 </div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-const urlCSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
+// Inicializar mapa en Mazatlán
+const map = L.map('map').setView([23.2329, -106.4062], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; OpenStreetMap contributors'}).addTo(map);
 
-let map=L.map('map').setView([23.25,-106.42],13); // Mazatlán
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OSM'}).addTo(map);
+// Marcadores
+let marcadoresVendedores = [];
+let layerProspectos = L.layerGroup().addTo(map);
 
-let layerVendedores=L.layerGroup().addTo(map);
-let layerProspectos=L.layerGroup().addTo(map);
+// Colores vendedores
+const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
+const vendorColors = {};
+let colorIndex = 0;
 
-let vendedoresColores={},colorPool=['orange','red','blue','brown','darkcyan','gold','magenta','darkgreen','darkorange','darkred'];
-let marcadoresVendedores=[];
-
-// Función para pin tipo Google Maps
-function pinIcon(color){
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36">
-    <path d="M12 0C7 0 3 4 3 9c0 6 9 27 9 27s9-21 9-27c0-5-4-9-9-9z" fill="${color}" stroke="#333" stroke-width="1"/>
-    <circle cx="12" cy="9" r="4" fill="white"/>
-  </svg>`;
-  return L.divIcon({
-    html:`<div style="width:24px;height:36px;">${svg}</div>`,
-    className:'',
-    iconSize:[24,36],
-    iconAnchor:[12,36]
+// Crear icono tipo “marker clásico de Leaflet”
+function createColoredIcon(color){
+  return L.icon({
+    iconUrl:`https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    iconSize:[25,41],
+    iconAnchor:[12,41],
+    popupAnchor:[1,-34],
+    shadowSize:[41,41]
   });
 }
 
-// Pin estrella dorada
-function estrellaIcon(){
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="gold" stroke="orange" stroke-width="1"/>
-  </svg>`;
-  return L.divIcon({html:`<div style="width:24px;height:24px;">${svg}</div>`,className:'',iconSize:[24,24],iconAnchor:[12,24]});
+function getVendorIcon(vendor){
+  const name = vendor.toUpperCase().trim();
+  if(name==="WENDY") return createColoredIcon("violet");
+  if(name==="ALFREDO") return createColoredIcon("green");
+  if(!vendorColors[vendor]){
+    vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
+    colorIndex++;
+  }
+  return createColoredIcon(vendorColors[vendor]);
 }
 
-function cargarVendedores(){
-  Papa.parse(urlCSV,{download:true,header:true,complete:function(results){
-    layerVendedores.clearLayers();
+// Leyenda
+function updateLegend(visits){
+  const legendDiv = document.getElementById("legend");
+  legendDiv.innerHTML = "<strong>Vendedores</strong>";
+
+  const special = {"WENDY":"violet","ALFREDO":"green"};
+  for(const [v,color] of Object.entries(special)){
+    const item = document.createElement("div");
+    item.className="legend-item";
+    const colorBox = document.createElement("div");
+    colorBox.className="legend-color";
+    colorBox.style.backgroundColor=color;
+    item.appendChild(colorBox);
+    const count = visits[v] || {hoy:0,mes:0};
+    item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
+    legendDiv.appendChild(item);
+  }
+
+  for(const [v,color] of Object.entries(vendorColors)){
+    if(v.toUpperCase()==="WENDY"||v.toUpperCase()==="ALFREDO") continue;
+    const item = document.createElement("div");
+    item.className="legend-item";
+    const colorBox = document.createElement("div");
+    colorBox.className="legend-color";
+    colorBox.style.backgroundColor=color;
+    item.appendChild(colorBox);
+    const count = visits[v] || {hoy:0,mes:0};
+    item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
+    legendDiv.appendChild(item);
+  }
+}
+
+// Parseo robusto de fechas
+function parseFechaCSV(fechaStr){
+  if(!fechaStr) return null;
+  fechaStr = fechaStr.trim();
+  const [fecha] = fechaStr.split(' ');
+  if(!fecha) return null;
+  const parts = fecha.split('/').map(p=>parseInt(p,10));
+  if(parts.length!==3) return null;
+  const [mes,dia,anio] = parts;
+  return {dia,mes,anio};
+}
+
+const hoy = new Date();
+const diaHoy = hoy.getDate();
+const mesHoy = hoy.getMonth()+1;
+const anioHoy = hoy.getFullYear();
+
+// Cargar CSV de vendedores
+Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv",{
+  download:true,
+  header:true,
+  complete:function(results){
+    const visits={};
+    marcadoresVendedores.forEach(m=>map.removeLayer(m));
     marcadoresVendedores=[];
-    let vendedoresUnicos=new Set();
-    results.data.forEach(f=>{
-      if(!f["COORDENADAS"] || !f["NOMBRE VENDEDOR"]) return;
-      const vendedor=f["NOMBRE VENDEDOR"].trim();
-      vendedoresUnicos.add(vendedor);
-      if(!vendedoresColores[vendedor]){
-        if(vendedor.toLowerCase()=="wendy") vendedoresColores[vendedor]="violet";
-        else if(vendedor.toLowerCase()=="alfredo") vendedoresColores[vendedor]="green";
-        else vendedoresColores[vendedor]=colorPool.shift()||"blue";
-      }
-      const [lat,lng]=f["COORDENADAS"].split(",").map(Number);
-      const m=L.marker([lat,lng],{icon:pinIcon(vendedoresColores[vendedor])})
-        .bindPopup(`<b>${vendedor}</b><br>${f["NOMBRE CLIENTE"]||""}<br>${f["GIRO"]||""}`);
-      m.addTo(layerVendedores);
-      marcadoresVendedores.push(m);
+
+    results.data.forEach(row=>{
+      if(!row.COORDENADAS || !row["NOMBRE VENDEDOR"] || !row.FECHA) return;
+      const coords = row.COORDENADAS.split(',').map(Number);
+      if(coords.length!==2) return;
+      const vendedor=row["NOMBRE VENDEDOR"].trim();
+      const icon=getVendorIcon(vendedor);
+
+      const marker = L.marker(coords,{icon}).addTo(map)
+        .bindPopup(`<b>Fecha:</b> ${row.FECHA}<br>
+                    <b>Vendedor:</b> ${vendedor}<br>
+                    <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
+                    <b>Giro:</b> ${row.GIRO}<br>
+                    <b>Motivo:</b> ${row.MOTIVO}<br>
+                    <b>Obs:</b> ${row.OBSERVACIONES}`);
+      marcadoresVendedores.push(marker);
+
+      if(!visits[vendedor]) visits[vendedor]={hoy:0,mes:0};
+      const fechaCelda=parseFechaCSV(row.FECHA);
+      if(!fechaCelda) return;
+      if(fechaCelda.dia===diaHoy && fechaCelda.mes===mesHoy && fechaCelda.anio===anioHoy) visits[vendedor].hoy++;
+      if(fechaCelda.mes===mesHoy && fechaCelda.anio===anioHoy) visits[vendedor].mes++;
     });
-    construirLeyenda(vendedoresUnicos);
-  }});
-}
 
-function construirLeyenda(vendedoresUnicos){
-  const lista=document.getElementById("listaVendedores");
-  lista.innerHTML="";
-  vendedoresUnicos.forEach(v=>{
-    const li=document.createElement("li");
-    li.innerHTML=`<span style="display:inline-block;width:12px;height:12px;background:${vendedoresColores[v]};margin-right:5px;"></span> ${v}`;
-    li.onclick=()=>centrarVendedor(v);
-    lista.appendChild(li);
-  });
-}
+    updateLegend(visits);
+  }
+});
 
+// Función para centrar vendedor
 function centrarVendedor(nombre){
   const puntos=[];
   marcadoresVendedores.forEach(m=>{
@@ -126,15 +191,21 @@ function centrarVendedor(nombre){
   if(puntos.length>0) map.fitBounds(L.latLngBounds(puntos));
 }
 
-// Buscador de giro de negocio (prospectos)
+// Buscador de giros (prospectos)
+function estrellaIcon(){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="gold" stroke="orange" stroke-width="1"/>
+  </svg>`;
+  return L.divIcon({html:`<div style="width:24px;height:24px;">${svg}</div>`,className:'',iconSize:[24,24],iconAnchor:[12,24]});
+}
+
 document.getElementById("buscarGiro").onclick=()=>{
   const valor=document.getElementById("buscadorGiro").value.toLowerCase().trim();
   if(!valor) return;
   layerProspectos.clearLayers();
   
-  // Aquí usarías tu API DENUE o dataset público con token
-  // Simulamos con algunos puntos de ejemplo alrededor de Mazatlán
-  const ejemplo=[ [23.25,-106.42],[23.27,-106.44],[23.23,-106.46] ];
+  // Simulación de puntos prospecto alrededor de Mazatlán
+  const ejemplo=[[23.25,-106.42],[23.27,-106.44],[23.23,-106.46]];
   ejemplo.forEach(p=>{
     L.marker(p,{icon:estrellaIcon()}).addTo(layerProspectos).bindPopup(`<b>${valor}</b>`);
   });
@@ -144,9 +215,6 @@ document.getElementById("limpiarGiro").onclick=()=>{
   layerProspectos.clearLayers();
   document.getElementById("buscadorGiro").value="";
 };
-
-cargarVendedores();
-setInterval(cargarVendedores,60000);
 </script>
 </body>
 </html>
