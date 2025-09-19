@@ -9,10 +9,10 @@
   <style>
     #map { height: 100vh; }
 
-    /* Leyenda */
+    /* Leyenda en esquina inferior izquierda */
     .legend {
       position: absolute;
-      top: 10px;
+      bottom: 10px; /* cambiado */
       left: 10px;
       background: white;
       padding: 10px;
@@ -49,7 +49,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Colores válidos para los iconos Leaflet
+// Colores válidos para iconos Leaflet
 const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
 const vendorColors = {};
 let colorIndex = 0;
@@ -79,7 +79,6 @@ function getVendorIcon(vendor) {
 function updateLegend() {
   const legendDiv = document.getElementById("legend");
   legendDiv.innerHTML = "<strong>Vendedores</strong>";
-  // Primero Wendy y Alfredo
   const special = {"WENDY":"violet","ALFREDO":"green"};
   for (const [v, color] of Object.entries(special)) {
     const item = document.createElement("div");
@@ -91,7 +90,6 @@ function updateLegend() {
     item.appendChild(document.createTextNode(v));
     legendDiv.appendChild(item);
   }
-  // Luego otros vendedores
   for (const [v, color] of Object.entries(vendorColors)) {
     if (v.toUpperCase() === "WENDY" || v.toUpperCase() === "ALFREDO") continue;
     const item = document.createElement("div");
