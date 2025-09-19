@@ -2,8 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8"/>
-<title>Mapa Vendedores + Prospectos</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mapa Vendedores - Flechas</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
 html, body {height:100%; margin:0;}
@@ -21,6 +20,7 @@ html, body {height:100%; margin:0;}
   max-height:40vh;
   overflow-y:auto;
   min-width:140px;
+  z-index:1000; /* siempre encima */
 }
 #leyenda h3{margin:0 0 5px 0;font-size:14px;}
 #leyenda ul{list-style:none;padding:0;margin:0;}
@@ -32,211 +32,106 @@ html, body {height:100%; margin:0;}
   font-family:sans-serif; font-size:13px;
   box-shadow:0 2px 6px rgba(0,0,0,0.25);
   display:flex; gap:6px; align-items:center;
+  z-index:1000;
 }
 .buscador input { width:150px; padding:6px; }
 .buscador button { padding:6px 8px; cursor:pointer; }
-.buscador label { font-size:12px; display:flex; align-items:center; gap:3px; }
-.result-count { font-size:12px; color:#333; margin-left:8px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="leyenda"><h3>Vendedores</h3><ul id="listaVendedores"></ul></div>
 <div class="buscador">
-  <input id="denueInput" placeholder="Ej: ferretería, taller..."/>
-  <button id="denueBuscar">Buscar</button>
-  <button id="denueClear">Limpiar</button>
-  <label><input type="checkbox" id="zoneCheckbox" checked/> Zona visible</label>
-  <span class="result-count" id="denueCount"></span>
+  <input id="buscadorVendedor" placeholder="Buscar vendedor..."/>
+  <button id="filtrarVendedor">Filtrar</button>
+  <button id="limpiarFiltro">Limpiar</button>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-/*******************************
- * CONFIG
- *******************************/
 const urlCSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
-const DENUE_TOKEN = "9a61f789-3f11-4b4f-8aab-83d770c471f9";
+
 let map = L.map('map').setView([23.25, -106.42], 13); // Mazatlán
-let marcadoresVendedores = [];
-let denueMarkers = [];
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OSM'}).addTo(map);
+
+let layerVendedores = L.layerGroup().addTo(map);
 let vendedoresColores = {};
 let colorPool = ['violet','green','orange','red','blue','brown','darkcyan','gold','magenta','darkgreen','darkorange','darkred'];
 
-/*******************************
- * MAPA Y TILE
- *******************************/
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  attribution:'&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-/*******************************
- * ICONOS
- *******************************/
-function createVendedorIcon(color){
-  return L.divIcon({
-    className:"vendedor-marker",
-    html:`<div style="width:16px;height:16px;background:${color};border-radius:50%;border:1px solid #333;"></div>`,
-    iconSize:[16,16], iconAnchor:[8,8]
-  });
-}
-
-function starIcon(color="#FFD54F"){
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='36' height='36'>
-    <polygon fill='${color}' stroke='#444' stroke-width='1' points='12,2 15,9 22,9 16.5,13.5 18.5,21 12,17 5.5,21 7.5,13.5 2,9 9,9'/>
+function flechaIcon(color){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <polygon points="12,2 15,9 12,7 9,9" fill="${color}" stroke="#333" stroke-width="1"/>
+    <line x1="12" y1="7" x2="12" y2="22" stroke="${color}" stroke-width="3"/>
   </svg>`;
-  return L.icon({iconUrl:'data:image/svg+xml;utf8,'+encodeURIComponent(svg),iconSize:[36,36],iconAnchor:[18,18]});
+  return L.divIcon({
+    html:`<div style="width:24px;height:24px;">${svg}</div>`,
+    className:'',
+    iconSize:[24,24],
+    iconAnchor:[12,22]
+  });
 }
 
-/*******************************
- * FUNCIONES VENDEDOR
- *******************************/
+let marcadoresVendedores = [];
 function cargarVendedores(){
-  Papa.parse(urlCSV,{
-    download:true, header:true,
-    complete:function(results){
-      actualizarVendedores(results.data);
-    }
-  });
+  Papa.parse(urlCSV,{download:true, header:true, complete:function(results){
+    layerVendedores.clearLayers();
+    marcadoresVendedores=[];
+    let vendedoresUnicos = new Set();
+    results.data.forEach(f=>{
+      if(!f["COORDENADAS"] || !f["NOMBRE VENDEDOR"]) return;
+      const vendedor=f["NOMBRE VENDEDOR"].trim();
+      vendedoresUnicos.add(vendedor);
+      if(!vendedoresColores[vendedor]){
+        if(vendedor.toLowerCase()=="wendy") vendedoresColores[vendedor]="violet";
+        else if(vendedor.toLowerCase()=="alfredo") vendedoresColores[vendedor]="green";
+        else vendedoresColores[vendedor]=colorPool.shift()||"blue";
+      }
+      const [lat,lng]=f["COORDENADAS"].split(",").map(Number);
+      const m=L.marker([lat,lng],{icon:flechaIcon(vendedoresColores[vendedor])})
+        .bindPopup(`<b>${vendedor}</b><br>${f["NOMBRE CLIENTE"]||""}<br>${f["GIRO"]||""}`);
+      m.addTo(layerVendedores);
+      marcadoresVendedores.push(m);
+    });
+    construirLeyenda(vendedoresUnicos);
+  }});
 }
 
-function actualizarVendedores(datos){
-  marcadoresVendedores.forEach(m=>map.removeLayer(m));
-  marcadoresVendedores=[];
-  let hoy = new Date().toISOString().slice(0,10);
-  let mesActual = hoy.slice(0,7);
-  let conteo={};
-  let vendedoresUnicos = new Set();
-
-  datos.forEach(fila=>{
-    if(!fila["COORDENADAS"] || !fila["NOMBRE VENDEDOR"]) return;
-    let [lat,lng] = fila["COORDENADAS"].split(",");
-    let vendedor = fila["NOMBRE VENDEDOR"].trim();
-    vendedoresUnicos.add(vendedor);
-
-    // asignar color
-    if(!vendedoresColores[vendedor]){
-      if(vendedor.toLowerCase()=="wendy") vendedoresColores[vendedor]="violet";
-      else if(vendedor.toLowerCase()=="alfredo") vendedoresColores[vendedor]="green";
-      else vendedoresColores[vendedor]=colorPool.shift()||"blue";
-    }
-
-    // conteo visitas
-    let fecha = new Date(fila["FECHA"]);
-    if(!conteo[vendedor]) conteo[vendedor]={hoy:0,mes:0};
-    if(fecha.toISOString().slice(0,10)===hoy) conteo[vendedor].hoy++;
-    if(fila["FECHA"].startsWith(mesActual)) conteo[vendedor].mes++;
-
-    // icono
-    let icon = createVendedorIcon(vendedoresColores[vendedor]);
-    let m = L.marker([parseFloat(lat),parseFloat(lng)],{icon}).bindPopup(
-      `<b>${vendedor}</b><br>${fila["NOMBRE CLIENTE"]||""}<br>${fila["GIRO"]||""}<br>${fila["MOTIVO"]||""}<br>${fila["OBSERVACIONES"]||""}`
-    ).addTo(map);
-    marcadoresVendedores.push(m);
-  });
-
-  construirLeyenda(conteo,vendedoresUnicos);
-}
-
-function construirLeyenda(conteo,vendedoresUnicos){
-  let lista = document.getElementById("listaVendedores");
+function construirLeyenda(vendedoresUnicos){
+  const lista=document.getElementById("listaVendedores");
   lista.innerHTML="";
   vendedoresUnicos.forEach(v=>{
-    let stats = conteo[v] || {hoy:0, mes:0};
-    let li = document.createElement("li");
-    li.innerHTML=`<span style="display:inline-block;width:12px;height:12px;background:${vendedoresColores[v]};margin-right:5px;"></span> ${v} ${stats.hoy}/${stats.mes}`;
+    const li=document.createElement("li");
+    li.innerHTML=`<span style="display:inline-block;width:12px;height:12px;background:${vendedoresColores[v]};margin-right:5px;"></span> ${v}`;
     li.onclick=()=>centrarVendedor(v);
     lista.appendChild(li);
   });
 }
 
 function centrarVendedor(nombre){
-  let puntos=[];
+  const puntos=[];
   marcadoresVendedores.forEach(m=>{
     if(m.getPopup().getContent().includes(nombre)) puntos.push(m.getLatLng());
   });
   if(puntos.length>0) map.fitBounds(L.latLngBounds(puntos));
 }
 
-/*******************************
- * DENUE
- *******************************/
-let municipiosGeoJSON=null;
-fetch('https://raw.githubusercontent.com/angelnmara/geojson/main/municipios.geojson')
-  .then(res=>res.json())
-  .then(data=>{ municipiosGeoJSON=data; });
+// Filtrado
+document.getElementById("filtrarVendedor").onclick=()=>{
+  const val=document.getElementById("buscadorVendedor").value.toLowerCase().trim();
+  marcadoresVendedores.forEach(m=>{
+    const cont=m.getPopup().getContent().toLowerCase();
+    if(cont.includes(val)) map.addLayer(m);
+    else map.removeLayer(m);
+  });
+};
+document.getElementById("limpiarFiltro").onclick=()=>{
+  marcadoresVendedores.forEach(m=>map.addLayer(m));
+  document.getElementById("buscadorVendedor").value="";
+};
 
-function clearDenue(){ denueMarkers.forEach(m=>map.removeLayer(m)); denueMarkers=[]; document.getElementById("denueCount").textContent=''; }
-
-function getMunicipioBBox(center){
-  if(!municipiosGeoJSON) return null;
-  for(const f of municipiosGeoJSON.features){
-    const layer=L.geoJSON(f);
-    if(layer.getBounds().contains(center)) return layer.getBounds();
-  }
-  return null;
-}
-
-function buildDenueUrl(text,bbox,page=1,limit=2000){
-  const bboxStr=`${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`;
-  return `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(text)}/${bboxStr}/${page}/${limit}?token=${DENUE_TOKEN}`;
-}
-
-async function handleDenueSearch(){
-  clearDenue();
-  const giro=document.getElementById('denueInput').value.trim();
-  const countEl=document.getElementById('denueCount');
-  countEl.textContent='Buscando...';
-  if(!giro){ countEl.textContent='Introduce un giro'; return; }
-
-  let bbox;
-  const useVisible=document.getElementById('zoneCheckbox').checked;
-  if(useVisible){
-    const b=map.getBounds();
-    const sw=b.getSouthWest(), ne=b.getNorthEast();
-    bbox=[sw.lat, sw.lng, ne.lat, ne.lng];
-  } else {
-    const center=map.getCenter();
-    const municipioBounds=getMunicipioBBox(center);
-    if(!municipioBounds){ countEl.textContent='No se pudo detectar municipio.'; return; }
-    const sw=municipioBounds.getSouthWest(), ne=municipioBounds.getNorthEast();
-    bbox=[sw.lat, sw.lng, ne.lat, ne.lng];
-  }
-
-  try{
-    const url=buildDenueUrl(giro,bbox,1,2000);
-    const res=await fetch(url);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data=await res.json();
-    if(!Array.isArray(data) || data.length===0){ countEl.textContent='No se encontraron resultados.'; return; }
-
-    const latlngs=[];
-    data.forEach(el=>{
-      const lat=parseFloat(el.Latitud||0), lon=parseFloat(el.Longitud||0);
-      if(!isFinite(lat)||!isFinite(lon)) return;
-      const popupHtml=`<b>${el.Nombre||'Sin nombre'}</b><br>${el.Calle||''} ${el.Num_Exterior||''}<br>${el.Colonia||''} ${el.Municipio||''}<br><b>Giro:</b> ${el.Clase_actividad||giro}`;
-      const m=L.marker([lat,lon],{icon:starIcon()}).bindPopup(popupHtml).addTo(map);
-      denueMarkers.push(m);
-      latlngs.push([lat,lon]);
-    });
-
-    if(latlngs.length>0 && !useVisible){ map.fitBounds(L.latLngBounds(latlngs).pad(0.15)); }
-    countEl.textContent=`${denueMarkers.length} prospecto(s) encontrados.`;
-  }catch(err){ console.error("Error DENUE:",err); countEl.textContent='Error en consulta DENUE'; }
-}
-
-/*******************************
- * EVENTOS
- *******************************/
-document.getElementById('denueBuscar').onclick=handleDenueSearch;
-document.getElementById('denueClear').onclick=clearDenue;
-
-/*******************************
- * INICIAL
- *******************************/
 cargarVendedores();
-setInterval(cargarVendedores,60000); // refresco cada minuto
+setInterval(cargarVendedores,60000);
 </script>
 </body>
 </html>
