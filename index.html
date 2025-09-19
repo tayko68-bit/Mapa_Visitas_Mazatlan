@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta charset="utf-8"/>
-<title>Mapa Vendedores - Flechas</title>
+<title>Mapa Vendedores y Prospectos</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
 html, body {height:100%; margin:0;}
-#map { height:100vh; }
+#map {height:100vh;}
 
-#leyenda {
+#leyenda{
   position:absolute;
   bottom:10px; right:10px;
   background:white;
@@ -19,14 +19,14 @@ html, body {height:100%; margin:0;}
   box-shadow:0 2px 6px rgba(0,0,0,0.3);
   max-height:40vh;
   overflow-y:auto;
-  min-width:140px;
-  z-index:1000; /* siempre encima */
+  min-width:150px;
+  z-index:1000;
 }
 #leyenda h3{margin:0 0 5px 0;font-size:14px;}
 #leyenda ul{list-style:none;padding:0;margin:0;}
 #leyenda li{margin:3px 0;cursor:pointer;}
 
-.buscador {
+.buscador{
   position:absolute; top:10px; right:10px;
   background:white; padding:8px; border-radius:6px;
   font-family:sans-serif; font-size:13px;
@@ -34,50 +34,60 @@ html, body {height:100%; margin:0;}
   display:flex; gap:6px; align-items:center;
   z-index:1000;
 }
-.buscador input { width:150px; padding:6px; }
-.buscador button { padding:6px 8px; cursor:pointer; }
+.buscador input{width:180px; padding:6px;}
+.buscador button{padding:6px 8px; cursor:pointer;}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="leyenda"><h3>Vendedores</h3><ul id="listaVendedores"></ul></div>
 <div class="buscador">
-  <input id="buscadorVendedor" placeholder="Buscar vendedor..."/>
-  <button id="filtrarVendedor">Filtrar</button>
-  <button id="limpiarFiltro">Limpiar</button>
+  <input id="buscadorGiro" placeholder="Buscar giro de negocio..."/>
+  <button id="buscarGiro">Buscar</button>
+  <button id="limpiarGiro">Limpiar</button>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-const urlCSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
+const urlCSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
 
-let map = L.map('map').setView([23.25, -106.42], 13); // Mazatlán
+let map=L.map('map').setView([23.25,-106.42],13); // Mazatlán
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OSM'}).addTo(map);
 
-let layerVendedores = L.layerGroup().addTo(map);
-let vendedoresColores = {};
-let colorPool = ['violet','green','orange','red','blue','brown','darkcyan','gold','magenta','darkgreen','darkorange','darkred'];
+let layerVendedores=L.layerGroup().addTo(map);
+let layerProspectos=L.layerGroup().addTo(map);
 
-function flechaIcon(color){
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-    <polygon points="12,2 15,9 12,7 9,9" fill="${color}" stroke="#333" stroke-width="1"/>
-    <line x1="12" y1="7" x2="12" y2="22" stroke="${color}" stroke-width="3"/>
+let vendedoresColores={},colorPool=['orange','red','blue','brown','darkcyan','gold','magenta','darkgreen','darkorange','darkred'];
+let marcadoresVendedores=[];
+
+// Función para pin tipo Google Maps
+function pinIcon(color){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36">
+    <path d="M12 0C7 0 3 4 3 9c0 6 9 27 9 27s9-21 9-27c0-5-4-9-9-9z" fill="${color}" stroke="#333" stroke-width="1"/>
+    <circle cx="12" cy="9" r="4" fill="white"/>
   </svg>`;
   return L.divIcon({
-    html:`<div style="width:24px;height:24px;">${svg}</div>`,
+    html:`<div style="width:24px;height:36px;">${svg}</div>`,
     className:'',
-    iconSize:[24,24],
-    iconAnchor:[12,22]
+    iconSize:[24,36],
+    iconAnchor:[12,36]
   });
 }
 
-let marcadoresVendedores = [];
+// Pin estrella dorada
+function estrellaIcon(){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="gold" stroke="orange" stroke-width="1"/>
+  </svg>`;
+  return L.divIcon({html:`<div style="width:24px;height:24px;">${svg}</div>`,className:'',iconSize:[24,24],iconAnchor:[12,24]});
+}
+
 function cargarVendedores(){
-  Papa.parse(urlCSV,{download:true, header:true, complete:function(results){
+  Papa.parse(urlCSV,{download:true,header:true,complete:function(results){
     layerVendedores.clearLayers();
     marcadoresVendedores=[];
-    let vendedoresUnicos = new Set();
+    let vendedoresUnicos=new Set();
     results.data.forEach(f=>{
       if(!f["COORDENADAS"] || !f["NOMBRE VENDEDOR"]) return;
       const vendedor=f["NOMBRE VENDEDOR"].trim();
@@ -88,7 +98,7 @@ function cargarVendedores(){
         else vendedoresColores[vendedor]=colorPool.shift()||"blue";
       }
       const [lat,lng]=f["COORDENADAS"].split(",").map(Number);
-      const m=L.marker([lat,lng],{icon:flechaIcon(vendedoresColores[vendedor])})
+      const m=L.marker([lat,lng],{icon:pinIcon(vendedoresColores[vendedor])})
         .bindPopup(`<b>${vendedor}</b><br>${f["NOMBRE CLIENTE"]||""}<br>${f["GIRO"]||""}`);
       m.addTo(layerVendedores);
       marcadoresVendedores.push(m);
@@ -116,18 +126,23 @@ function centrarVendedor(nombre){
   if(puntos.length>0) map.fitBounds(L.latLngBounds(puntos));
 }
 
-// Filtrado
-document.getElementById("filtrarVendedor").onclick=()=>{
-  const val=document.getElementById("buscadorVendedor").value.toLowerCase().trim();
-  marcadoresVendedores.forEach(m=>{
-    const cont=m.getPopup().getContent().toLowerCase();
-    if(cont.includes(val)) map.addLayer(m);
-    else map.removeLayer(m);
+// Buscador de giro de negocio (prospectos)
+document.getElementById("buscarGiro").onclick=()=>{
+  const valor=document.getElementById("buscadorGiro").value.toLowerCase().trim();
+  if(!valor) return;
+  layerProspectos.clearLayers();
+  
+  // Aquí usarías tu API DENUE o dataset público con token
+  // Simulamos con algunos puntos de ejemplo alrededor de Mazatlán
+  const ejemplo=[ [23.25,-106.42],[23.27,-106.44],[23.23,-106.46] ];
+  ejemplo.forEach(p=>{
+    L.marker(p,{icon:estrellaIcon()}).addTo(layerProspectos).bindPopup(`<b>${valor}</b>`);
   });
 };
-document.getElementById("limpiarFiltro").onclick=()=>{
-  marcadoresVendedores.forEach(m=>map.addLayer(m));
-  document.getElementById("buscadorVendedor").value="";
+
+document.getElementById("limpiarGiro").onclick=()=>{
+  layerProspectos.clearLayers();
+  document.getElementById("buscadorGiro").value="";
 };
 
 cargarVendedores();
