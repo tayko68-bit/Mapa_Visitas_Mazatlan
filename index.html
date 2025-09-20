@@ -1,251 +1,111 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <title>Mapa de Vendedores y Prospectos</title>
+  <meta charset="UTF-8">
+  <title>Mapa Tornicenter</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
     #map { height: 100vh; }
-
-    /* Leyenda esquina inferior derecha */
-    .legend {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      background: rgba(255,255,255,0.95);
-      padding: 10px;
-      border-radius: 6px;
-      font-family: sans-serif;
-      font-size: 14px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      max-height: 90vh;
-      overflow-y: auto;
-      z-index: 1000;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-    .legend-color {
-      width: 16px;
-      height: 16px;
-      margin-right: 6px;
-      border-radius: 50%;
-      border: 1px solid #00000050;
-    }
-
-    /* Buscador */
-    .buscador {
+    .filter-container {
       position: absolute;
       top: 10px;
-      left: 10px;
-      background: rgba(255,255,255,0.95);
+      right: 10px;
+      background: white;
       padding: 10px;
-      border-radius: 6px;
-      font-family: sans-serif;
-      font-size: 14px;
+      border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       z-index: 1000;
     }
-    .buscador input { padding: 4px; width: 180px; }
-    .buscador button { padding: 4px 6px; margin-left:4px; }
+    button { margin-top: 5px; width: 100%; }
   </style>
 </head>
 <body>
-<div id="map"></div>
-<div class="legend" id="legend"><strong>Vendedores</strong></div>
+  <div id="map"></div>
+  <div class="filter-container">
+    <select id="giroSelect">
+      <option value="">-- Selecciona giro --</option>
+      <option value="466111">Ferreterías</option>
+      <option value="467111">Material eléctrico</option>
+      <option value="466312">Tornillerías</option>
+      <option value="811111">Talleres mecánicos</option>
+      <option value="468211">Refaccionarias</option>
+      <option value="327121">Alumineros</option>
+      <option value="323111">Rotulistas / impresión</option>
+      <option value="333241">Agrícolas (maquinaria)</option>
+    </select>
+    <button id="buscarBtn">Buscar</button>
+    <button id="limpiarBtn">Limpiar</button>
+  </div>
 
-<div class="buscador">
-  <input id="buscadorGiro" placeholder="Buscar giro de negocio..."/>
-  <button id="buscarGiro">Buscar</button>
-  <button id="limpiarGiro">Limpiar</button>
-  <span id="mensajeGiro" style="margin-left:10px; font-weight:bold;"></span>
-</div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    const map = L.map('map').setView([24.8, -107.4], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
 
-<script>
-const map = L.map('map').setView([23.2329, -106.4062], 12); // Mazatlán
+    let markersLayer = L.layerGroup().addTo(map);
+    let negocios = [];
+    let municipioDetectado = "";
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+    // 1. Detectar ubicación y convertir a municipio
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      map.setView([lat, lon], 12);
 
-// -------------------
-// Marcadores de vendedores
-// -------------------
-const colorPalette = ["red", "orange", "yellow", "blue", "grey", "black", "gold"];
-const vendorColors = {};
-let colorIndex = 0;
-
-function createColoredIcon(color) {
-  return L.icon({
-    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  });
-}
-
-function getVendorIcon(vendor) {
-  const name = vendor.toUpperCase().trim();
-  if (name === "WENDY") return createColoredIcon("violet");
-  if (name === "ALFREDO") return createColoredIcon("green");
-  if (!vendorColors[vendor]) {
-    vendorColors[vendor] = colorPalette[colorIndex % colorPalette.length];
-    colorIndex++;
-  }
-  return createColoredIcon(vendorColors[vendor]);
-}
-
-function updateLegend(visits) {
-  const legendDiv = document.getElementById("legend");
-  legendDiv.innerHTML = "<strong>Vendedores</strong>";
-
-  const special = {"WENDY":"violet","ALFREDO":"green"};
-  for (const [v, color] of Object.entries(special)) {
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    const colorBox = document.createElement("div");
-    colorBox.className = "legend-color";
-    colorBox.style.backgroundColor = color;
-    item.appendChild(colorBox);
-    const count = visits[v] || {hoy:0, mes:0};
-    item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
-    legendDiv.appendChild(item);
-  }
-
-  for (const [v, color] of Object.entries(vendorColors)) {
-    if (v.toUpperCase() === "WENDY" || v.toUpperCase() === "ALFREDO") continue;
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    const colorBox = document.createElement("div");
-    colorBox.className = "legend-color";
-    colorBox.style.backgroundColor = color;
-    item.appendChild(colorBox);
-    const count = visits[v] || {hoy:0, mes:0};
-    item.appendChild(document.createTextNode(`${v} ${count.hoy}/${count.mes}`));
-    legendDiv.appendChild(item);
-  }
-}
-
-// -------------------
-// Parseo robusto de fechas M/D/YYYY H:MM:SS
-// -------------------
-function parseFechaCSV(fechaStr) {
-  if (!fechaStr) return null;
-  fechaStr = fechaStr.trim();
-  const [fecha] = fechaStr.split(' ');
-  if (!fecha) return null;
-  const parts = fecha.split('/').map(p => parseInt(p, 10));
-  if (parts.length !== 3) return null;
-  const [mes, dia, anio] = parts;
-  return { dia, mes, anio }; 
-}
-
-const hoy = new Date();
-const diaHoy = hoy.getDate();
-const mesHoy = hoy.getMonth() + 1;
-const anioHoy = hoy.getFullYear();
-
-// -------------------
-// Cargar CSV de vendedores
-// -------------------
-Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv", {
-  download: true,
-  header: true,
-  complete: function(results) {
-    const visits = {}; // contador por vendedor
-
-    results.data.forEach(row => {
-      if (!row.COORDENADAS || !row["NOMBRE VENDEDOR"] || !row.FECHA) return;
-      const coords = row.COORDENADAS.split(',').map(Number);
-      if (coords.length !== 2) return;
-
-      const vendedor = row["NOMBRE VENDEDOR"].trim();
-      const icon = getVendorIcon(vendedor);
-
-      L.marker(coords, { icon })
-        .addTo(map)
-        .bindPopup(
-          `<b>Fecha:</b> ${row.FECHA}<br>
-           <b>Vendedor:</b> ${vendedor}<br>
-           <b>Cliente:</b> ${row["NOMBRE CLIENTE"]}<br>
-           <b>Giro:</b> ${row.GIRO}<br>
-           <b>Motivo:</b> ${row.MOTIVO}<br>
-           <b>Obs:</b> ${row.OBSERVACIONES}`
-        );
-
-      if (!visits[vendedor]) visits[vendedor] = {hoy:0, mes:0};
-      const fechaCelda = parseFechaCSV(row.FECHA);
-      if (!fechaCelda) return;
-      if (fechaCelda.dia === diaHoy && fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].hoy++;
-      if (fechaCelda.mes === mesHoy && fechaCelda.anio === anioHoy) visits[vendedor].mes++;
-    });
-
-    updateLegend(visits);
-  }
-});
-
-// -------------------
-// Buscador DENUE
-// -------------------
-let layerProspectos = L.layerGroup().addTo(map);
-
-function estrellaIcon(){
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="gold" stroke="orange" stroke-width="1"/>
-  </svg>`;
-  return L.divIcon({html:`<div style="width:24px;height:24px;">${svg}</div>`,className:'',iconSize:[24,24],iconAnchor:[12,24]});
-}
-
-async function buscarGiroDENUE(giro){
-  const mensajeSpan = document.getElementById("mensajeGiro");
-  layerProspectos.clearLayers();
-  if(!giro){ mensajeSpan.textContent = "Introduce un giro."; return; }
-
-  mensajeSpan.textContent = "Buscando...";
-  const bounds = map.getBounds();
-  const minLat = bounds.getSouth(), maxLat = bounds.getNorth();
-  const minLon = bounds.getWest(), maxLon = bounds.getEast();
-  const token = "9a61f789-3f11-4b4f-8aab-83d770c471f9";
-  const url = `https://www.inegi.org.mx/app/api/denue/v1/consulta/buscar/${encodeURIComponent(giro)}?type=json&token=${token}&lat1=${minLat}&lat2=${maxLat}&lon1=${minLon}&lon2=${maxLon}`;
-
-  console.log("URL DENUE:", url);
-
-  try{
-    const res = await fetch(url);
-    const data = await res.json();
-    if(!data || !data.data || data.data.length === 0){
-      mensajeSpan.textContent = "No se encontraron resultados.";
-      return;
-    }
-    data.data.forEach(item=>{
-      if(item.Latitud && item.Longitud){
-        L.marker([item.Latitud,item.Longitud],{icon:estrellaIcon()})
-         .addTo(layerProspectos)
-         .bindPopup(`<b>${item.Nombre}</b><br>${item.Giro}<br>${item.Direccion}`);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`);
+        const data = await res.json();
+        municipioDetectado = data.address.city || data.address.town || data.address.village || data.address.county || "";
+        alert("Municipio detectado: " + municipioDetectado);
+      } catch (err) {
+        console.error("Error obteniendo municipio:", err);
       }
-    });
-    mensajeSpan.textContent = `Resultados encontrados: ${data.data.length}`;
-  }catch(err){
-    console.error("Error DENUE:",err);
-    mensajeSpan.textContent = "Error en la búsqueda.";
-  }
-}
 
-document.getElementById("buscarGiro").onclick = ()=>{
-  const valor = document.getElementById("buscadorGiro").value.trim();
-  buscarGiroDENUE(valor);
-};
-document.getElementById("limpiarGiro").onclick = ()=>{
-  layerProspectos.clearLayers();
-  document.getElementById("buscadorGiro").value="";
-  document.getElementById("mensajeGiro").textContent="";
-};
-</script>
+      cargarCSV();
+    });
+
+    // 2. Cargar CSV desde Google Sheets publicado
+    function cargarCSV() {
+      Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTkeTAOHAWUeU8swD3EPEkgvrLzMRawaD0J2l1VQn-IXSpGye4Yz4TzJr59d-xNU_-r7IMFZBgI0IAj/pub?output=csv", {
+        download: true,
+        header: true,
+        complete: results => {
+          negocios = results.data;
+          console.log("CSV cargado:", negocios.length, "registros");
+        }
+      });
+    }
+
+    // 3. Filtrar y mostrar en mapa
+    document.getElementById("buscarBtn").addEventListener("click", () => {
+      const giro = document.getElementById("giroSelect").value;
+      markersLayer.clearLayers();
+
+      let filtrados = negocios.filter(n => 
+        n.nom_mun && n.nom_mun.toLowerCase().includes(municipioDetectado.toLowerCase())
+      );
+
+      if (giro) {
+        filtrados = filtrados.filter(n => n.codigo_act === giro);
+      }
+
+      filtrados.forEach(n => {
+        if (n.latitud && n.longitud) {
+          L.marker([+n.latitud, +n.longitud])
+            .bindPopup(`<b>${n.nom_estab}</b><br>${n.nom_vial} ${n.numero_ext || ''}<br>${n.nom_mun}`)
+            .addTo(markersLayer);
+        }
+      });
+
+      alert(filtrados.length + " negocios encontrados en " + municipioDetectado);
+    });
+
+    document.getElementById("limpiarBtn").addEventListener("click", () => {
+      markersLayer.clearLayers();
+    });
+  </script>
 </body>
 </html>
