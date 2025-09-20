@@ -1,111 +1,417 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Mapa Tornicenter</title>
+  <meta charset="utf-8" />
+  <title>Mapa: Vendedores + Prospectos (DENUE)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
+    html,body,#map { height: 100%; margin:0; padding:0; }
     #map { height: 100vh; }
-    .filter-container {
+
+    /* Panel superior derecho (giro + botones) */
+    .panel {
       position: absolute;
       top: 10px;
       right: 10px;
-      background: white;
-      padding: 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 8px;
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      font-family: sans-serif;
       z-index: 1000;
+      min-width: 210px;
     }
-    button { margin-top: 5px; width: 100%; }
+    .panel select, .panel button {
+      width: 100%;
+      margin-top:6px;
+      padding:6px;
+      box-sizing: border-box;
+    }
+
+    /* Leyenda inferior derecha */
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 13px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      z-index: 1000;
+      max-height: 40vh;
+      overflow-y: auto;
+      min-width:150px;
+    }
+    .legend-item { display:flex; align-items:center; margin-bottom:6px; }
+    .legend-color {
+      width:16px; height:16px; margin-right:8px; border-radius:50%; border:1px solid #00000040;
+      flex:0 0 16px;
+    }
+    .legend-star {
+      width:18px; height:18px; margin-right:8px; display:inline-block; flex:0 0 18px;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="filter-container">
+
+  <!-- Panel: giro + botones -->
+  <div class="panel" id="panel">
+    <label for="giroSelect"><strong>Giro (prospectos)</strong></label>
     <select id="giroSelect">
-      <option value="">-- Selecciona giro --</option>
-      <option value="466111">Ferreterías</option>
-      <option value="467111">Material eléctrico</option>
-      <option value="466312">Tornillerías</option>
-      <option value="811111">Talleres mecánicos</option>
-      <option value="468211">Refaccionarias</option>
-      <option value="327121">Alumineros</option>
-      <option value="323111">Rotulistas / impresión</option>
-      <option value="333241">Agrícolas (maquinaria)</option>
+      <option value="">-- Selecciona un giro --</option>
     </select>
-    <button id="buscarBtn">Buscar</button>
-    <button id="limpiarBtn">Limpiar</button>
+    <button id="buscarBtn">Buscar (en municipio detectado)</button>
+    <button id="limpiarBtn">Limpiar prospectos</button>
+    <div id="status" style="margin-top:6px; font-size:12px; color:#333;"></div>
   </div>
 
+  <!-- Leyenda -->
+  <div class="legend" id="legend"></div>
+
+  <!-- Librerías -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
   <script>
-    const map = L.map('map').setView([24.8, -107.4], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
+  /*************************************************************************
+   * Configuración: pega aquí tus URLs si cambian
+   *************************************************************************/
+  // Google Sheet (vendedores) publicado en CSV (el que me compartiste)
+  const URL_VENDEDORES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
 
-    let markersLayer = L.layerGroup().addTo(map);
-    let negocios = [];
-    let municipioDetectado = "";
+  // CSV DENUE (publicado en Drive) - el que publicaste
+  const URL_DENUE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTkeTAOHAWUeU8swD3EPEkgvrLzMRawaD0J2l1VQn-IXSpGye4Yz4TzJr59d-xNU_-r7IMFZBgI0IAj/pub?output=csv";
 
-    // 1. Detectar ubicación y convertir a municipio
+  // Catálogo de giros (nombre amigable => array de códigos SCIAN)
+  const GIROS = {
+    "Ferreterías": [467111, 467112, 467113],
+    "Automotriz y refacciones": [468211, 468212, 811191, 811192],
+    "Eléctricas e instalaciones": [238221, 467121],
+    "Aluminio y metalmecánica": [238322, 332322, 332710, 332991],
+    "Rotulación y construcción ligera": [323111, 238390],
+    "Agrícolas y maquinaria": [333111, 333112, 811310, 461110, 461120],
+    "Talleres mecánicos": [811191, 811192],
+    "Refacciones automotrices": [468211, 468212],
+    "Alumineros / carp. aluminio": [332322],
+    "Instaladores de rótulos": [323111],
+    "Suministros industriales": [332991, 332710]
+  };
+
+  /*************************************************************************
+   * Utilidades
+   *************************************************************************/
+  // Normaliza texto: quita tildes, pasa a minúsculas y trim
+  function normalizarTexto(txt) {
+    if (!txt && txt !== 0) return "";
+    return String(txt)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .trim();
+  }
+
+  // Icono estrella dorada (divIcon con SVG)
+  function crearIconoEstrella() {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9"
+        fill="#FFD700" stroke="#E6B800" stroke-width="0.7"/>
+    </svg>`;
+    return L.divIcon({
+      html: `<div style="width:22px;height:22px;">${svg}</div>`,
+      className: '',
+      iconSize: [22,22],
+      iconAnchor: [11,22],
+      popupAnchor: [0,-18]
+    });
+  }
+
+  // Icono vendedor (marker color from pointhi repo)
+  function crearIconoColor(colorName) {
+    return L.icon({
+      iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+
+  /*************************************************************************
+   * Inicialización del mapa y capas
+   *************************************************************************/
+  const map = L.map('map').setView([23.2329, -106.4062], 12); // centrado inicial (Mazatlán/Culiacán puedes cambiar)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Capas
+  const layerVendedores = L.layerGroup().addTo(map); // siempre visibles
+  const layerProspectos = L.layerGroup().addTo(map); // se añaden/quitan con Buscar/Limpiar
+
+  // Estado
+  let municipioDetectadoNorm = ""; // normalizado
+  let denueData = []; // todos los registros del CSV DENUE
+  let vendedoresData = []; // registros de tu hoja de vendedores
+  const vendorColorMap = {}; // nombre vendedor -> colorName
+
+  /*************************************************************************
+   * Llenar el desplegable de giros
+   *************************************************************************/
+  const giroSelect = document.getElementById('giroSelect');
+  Object.keys(GIROS).forEach(nombre => {
+    const opt = document.createElement('option');
+    opt.value = nombre;
+    opt.textContent = nombre;
+    giroSelect.appendChild(opt);
+  });
+
+  /*************************************************************************
+   * Carga vendedores (Google Sheet CSV)
+   * - Detectamos columnas posibles y normalizamos
+   *************************************************************************/
+  function cargarVendedores() {
+    Papa.parse(URL_VENDEDORES_CSV, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete(results) {
+        const rows = results.data;
+        vendedoresData = rows;
+        renderVendedores(rows);
+        console.log("Vendedores cargados:", rows.length);
+      },
+      error(err) {
+        console.error("Error cargando vendedores:", err);
+        document.getElementById('status').textContent = "Error cargando vendedores";
+      }
+    });
+  }
+
+  // Determina el nombre de columna más probable para cada campo (robusto)
+  function valorFila(row, keys) {
+    for (const k of keys) {
+      if (row[k] !== undefined) return row[k];
+    }
+    return "";
+  }
+
+  function renderVendedores(rows) {
+    layerVendedores.clearLayers();
+    let colorIndex = 0;
+    const palette = ["red","orange","yellow","blue","grey","black","green","violet","pink","cadetblue"];
+
+    rows.forEach(r => {
+      // Headers que vimos: FECHA, NOMBRE VENDEDOR, NOMBRE CLIENTE, GIRO, MOTIVO, OBSERVACIONES, COORDENADAS
+      const nombreV = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || valorFila(r, ["vendedor","Vendedor"]) || "Sin vendedor";
+      const coordStr = valorFila(r, ["COORDENADAS","coordenadas","Coordenadas"]) || "";
+      // csv puede tener coordenadas separadas o lat/long separados
+      let lat = null, lon = null;
+      if (coordStr && coordStr.includes(",")) {
+        const p = coordStr.split(",").map(s=>s.trim());
+        lat = parseFloat(p[0]); lon = parseFloat(p[1]);
+      } else {
+        // intentar columnas latitud/longitud
+        lat = parseFloat(valorFila(r, ["latitud","LATITUD","Latitud"]));
+        lon = parseFloat(valorFila(r, ["longitud","LONGITUD","Longitud"]));
+      }
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      // Asignar color por vendedor (consistente)
+      let colorName = vendorColorMap[nombreV];
+      if (!colorName) {
+        colorName = palette[colorIndex % palette.length];
+        vendorColorMap[nombreV] = colorName;
+        colorIndex++;
+      }
+
+      const marker = L.marker([lat, lon], { icon: crearIconoColor(colorName) });
+      const cliente = valorFila(r, ["NOMBRE CLIENTE","NOMBRE_CLIENTE","nombre cliente","nom_estab"]) || "";
+      const fecha = valorFila(r, ["FECHA","fecha"]) || "";
+      const giro = valorFila(r, ["GIRO","giro"]) || "";
+      const motivo = valorFila(r, ["MOTIVO","motivo"]) || "";
+      const obs = valorFila(r, ["OBSERVACIONES","observaciones"]) || "";
+
+      marker.bindPopup(`<b>Vendedor:</b> ${nombreV}<br><b>Fecha:</b> ${fecha}<br><b>Cliente:</b> ${cliente}<br><b>Giro:</b> ${giro}<br><b>Motivo:</b> ${motivo}<br><b>Obs:</b> ${obs}`);
+      marker.addTo(layerVendedores);
+    });
+
+    // Actualizar leyenda (vendors + prospectos)
+    actualizarLeyenda();
+  }
+
+  /*************************************************************************
+   * Cargar CSV DENUE (publicado en Drive) y guardar en denueData
+   *************************************************************************/
+  function cargarDENUE() {
+    document.getElementById('status').textContent = "Cargando base DENUE...";
+    Papa.parse(URL_DENUE_CSV, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete(results) {
+        denueData = results.data.map(r => {
+          // normaliza campos que esperamos: nom_estab, codigo_act, latitud, longitud, nom_mun
+          return {
+            nom_estab: r.nom_estab || r.NOMBRE_ESTAB || r.nom_estab || "",
+            codigo_act: r.codigo_act || r.CODIGO_ACT || r.codigo_act || r.clase_actividad || r.CLASSE_ACT || "",
+            nombre_act: r.nombre_act || r.NOMBRE_ACT || r.nombre_act || "",
+            latitud: parseFloat(r.latitud || r.LATITUD || r.Latitud || r.Latitud_de || r.Lat),
+            longitud: parseFloat(r.longitud || r.LONGITUD || r.Longitud || r.Long),
+            nom_mun: r.nom_mun || r.NOM_MUN || r.nom_mun || r.municipio || r.MUNICIPIO || r.mun || "",
+            nom_loc: r.nom_loc || r.NOM_LOC || r.localidad || "",
+            raw: r
+          };
+        }).filter(d => !isNaN(d.latitud) && !isNaN(d.longitud));
+        document.getElementById('status').textContent = `DENUE cargada: ${denueData.length} registros`;
+        console.log("DENUE sample:", denueData.slice(0,5));
+      },
+      error(err) {
+        console.error("Error cargando DENUE:", err);
+        document.getElementById('status').textContent = "Error cargando DENUE";
+      }
+    });
+  }
+
+  /*************************************************************************
+   * Detectar municipio con geolocation + reverse geocoding
+   *************************************************************************/
+  async function detectarMunicipio() {
+    if (!navigator.geolocation) {
+      document.getElementById('status').textContent = "Geolocalización no disponible";
+      return;
+    }
+    document.getElementById('status').textContent = "Detectando ubicación...";
     navigator.geolocation.getCurrentPosition(async pos => {
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
       map.setView([lat, lon], 12);
 
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`);
-        const data = await res.json();
-        municipioDetectado = data.address.city || data.address.town || data.address.village || data.address.county || "";
-        alert("Municipio detectado: " + municipioDetectado);
+        const rsp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`);
+        const data = await rsp.json();
+        // nom municipio puede venir en different fields; buscamos lo más probable
+        const addr = data && data.address ? data.address : {};
+        const muni = addr.city || addr.town || addr.village || addr.county || addr.state_district || addr.county || addr.municipality || addr.county;
+        municipioDetectadoNorm = normalizarTexto(muni || "");
+        document.getElementById('status').textContent = municipioDetectadoNorm ? `Municipio detectado: ${muni}` : "Municipio no detectado";
+        console.log("Municipio raw:", muni, "normalizado:", municipioDetectadoNorm);
       } catch (err) {
-        console.error("Error obteniendo municipio:", err);
+        console.error("Reverse geocode error:", err);
+        document.getElementById('status').textContent = "No fue posible detectar municipio";
       }
+    }, err => {
+      console.error("Geolocation error:", err);
+      document.getElementById('status').textContent = "Permiso de ubicación denegado o error";
+    }, { enableHighAccuracy: false, timeout: 10000 });
+  }
 
-      cargarCSV();
-    });
+  /*************************************************************************
+   * Buscar prospectos (filtrar denueData por municipioDetectadoNorm y giro)
+   *************************************************************************/
+  function buscarProspectos() {
+    layerProspectos.clearLayers();
+    document.getElementById('status').textContent = "Buscando prospectos...";
+    const giroNombre = giroSelect.value;
+    if (!giroNombre) {
+      document.getElementById('status').textContent = "Selecciona un giro primero";
+      return;
+    }
+    const codigos = GIROS[giroNombre].map(c => String(c)); // codigos como strings para comparar
 
-    // 2. Cargar CSV desde Google Sheets publicado
-    function cargarCSV() {
-      Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vTkeTAOHAWUeU8swD3EPEkgvrLzMRawaD0J2l1VQn-IXSpGye4Yz4TzJr59d-xNU_-r7IMFZBgI0IAj/pub?output=csv", {
-        download: true,
-        header: true,
-        complete: results => {
-          negocios = results.data;
-          console.log("CSV cargado:", negocios.length, "registros");
-        }
-      });
+    if (!municipioDetectadoNorm) {
+      document.getElementById('status').textContent = "Municipio no detectado; espera o recarga la página";
+      return;
     }
 
-    // 3. Filtrar y mostrar en mapa
-    document.getElementById("buscarBtn").addEventListener("click", () => {
-      const giro = document.getElementById("giroSelect").value;
-      markersLayer.clearLayers();
-
-      let filtrados = negocios.filter(n => 
-        n.nom_mun && n.nom_mun.toLowerCase().includes(municipioDetectado.toLowerCase())
-      );
-
-      if (giro) {
-        filtrados = filtrados.filter(n => n.codigo_act === giro);
-      }
-
-      filtrados.forEach(n => {
-        if (n.latitud && n.longitud) {
-          L.marker([+n.latitud, +n.longitud])
-            .bindPopup(`<b>${n.nom_estab}</b><br>${n.nom_vial} ${n.numero_ext || ''}<br>${n.nom_mun}`)
-            .addTo(markersLayer);
-        }
-      });
-
-      alert(filtrados.length + " negocios encontrados en " + municipioDetectado);
+    // Filtrar denueData por municipio normalizado y por código
+    const resultados = denueData.filter(d => {
+      if (!d.nom_mun) return false;
+      const muniNorm = normalizarTexto(d.nom_mun);
+      // Igualdad exacta de municipio normalizado OR contiene (por seguridad)
+      if (!(muniNorm === municipioDetectadoNorm || muniNorm.includes(municipioDetectadoNorm) || municipioDetectadoNorm.includes(muniNorm))) return false;
+      // Comparar codigo_act (a veces en CSV viene con espacios o como número)
+      const code = String(d.codigo_act || d.raw.codigo_act || d.raw.CODIGO_ACT || d.raw.codigo_act).replace(/\D/g,'');
+      return codigos.includes(code) || codigos.includes(String(d.codigo_act));
     });
 
-    document.getElementById("limpiarBtn").addEventListener("click", () => {
-      markersLayer.clearLayers();
+    // Dibujar en el mapa
+    const iconEstrella = crearIconoEstrella();
+    resultados.forEach(r => {
+      const mk = L.marker([r.latitud, r.longitud], { icon: iconEstrella })
+        .bindPopup(`<b>${r.nom_estab || 'Sin nombre'}</b><br>${r.nombre_act || ''}<br>${r.nom_mun || ''}<br>SCIAN: ${r.codigo_act || ''}`);
+      mk.addTo(layerProspectos);
     });
+
+    document.getElementById('status').textContent = `${resultados.length} prospectos mostrados en ${municipioDetectadoNorm}`;
+    if (resultados.length > 0) {
+      // ajustar bounds para ver resultados y vendedores juntos
+      try {
+        const group = L.featureGroup([...layerVendedores.getLayers(), ...layerProspectos.getLayers()]);
+        map.fitBounds(group.getBounds().pad(0.1));
+      } catch(e) { console.warn("No se pudo ajustar bounds:", e); }
+    }
+    actualizarLeyenda(); // para que aparezca línea prospectos también
+  }
+
+  function limpiarProspectos() {
+    layerProspectos.clearLayers();
+    document.getElementById('status').textContent = "Prospectos limpiados";
+    actualizarLeyenda();
+  }
+
+  /*************************************************************************
+   * Leyenda: muestra vendedores por color + prospectos con estrella
+   *************************************************************************/
+  function actualizarLeyenda() {
+    const legend = document.getElementById('legend');
+    legend.innerHTML = ""; // limpio
+
+    // Vendors (ordenar vendorColorMap keys)
+    Object.keys(vendorColorMap).forEach(v => {
+      const color = vendorColorMap[v];
+      const div = document.createElement('div');
+      div.className = 'legend-item';
+      const box = document.createElement('div');
+      box.className = 'legend-color';
+      box.style.backgroundColor = color;
+      div.appendChild(box);
+      const txt = document.createTextNode(v);
+      div.appendChild(txt);
+      legend.appendChild(div);
+    });
+
+    // Prospectos line
+    const p = document.createElement('div');
+    p.className = 'legend-item';
+    const star = document.createElement('div');
+    star.className = 'legend-star';
+    star.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
+      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="#FFD700" stroke="#E6B800" stroke-width="0.6"/>
+    </svg>`;
+    p.appendChild(star);
+    p.appendChild(document.createTextNode("Prospectos (DENUE)"));
+    legend.appendChild(p);
+  }
+
+  /*************************************************************************
+   * Eventos botones
+   *************************************************************************/
+  document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
+  document.getElementById('limpiarBtn').addEventListener('click', limpiarProspectos);
+
+  /*************************************************************************
+   * Inicio: cargar vendedores y denue; detectar municipio
+   *************************************************************************/
+  cargarVendedores();
+  cargarDENUE();
+  detectarMunicipio();
+
   </script>
 </body>
 </html>
