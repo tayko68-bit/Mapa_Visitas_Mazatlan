@@ -187,4 +187,138 @@
       }
       if (isNaN(lat) || isNaN(lon)) return;
       let colorName = vendorColorMap[nombreV];
-      if (!colorName) { colorName = palette[colorIndex % palette
+      if (!colorName) { colorName = palette[colorIndex % palette.length]; vendorColorMap[nombreV] = colorName; colorIndex++; }
+      const marker = L.marker([lat, lon], { icon: crearIconoColor(colorName) });
+      const cliente = valorFila(r, ["NOMBRE CLIENTE","nombre cliente","nom_estab"]) || "";
+      const fecha = valorFila(r, ["FECHA","fecha"]) || "";
+      const giro = valorFila(r, ["GIRO","giro"]) || "";
+      const motivo = valorFila(r, ["MOTIVO","motivo"]) || "";
+      const obs = valorFila(r, ["OBSERVACIONES","observaciones"]) || "";
+      marker.bindPopup(`<b>Vendedor:</b> ${nombreV}<br><b>Fecha:</b> ${fecha}<br><b>Cliente:</b> ${cliente}<br><b>Giro:</b> ${giro}<br><b>Motivo:</b> ${motivo}<br><b>Obs:</b> ${obs}`);
+      marker.addTo(layerVendedores);
+    });
+    actualizarLeyenda();
+  }
+
+  // ====================== CARGA DENUE EN TIEMPO REAL ======================
+  function actualizarProspectosEnMapa() {
+    layerProspectos.clearLayers();
+    if (!municipioDetectadoNorm || !giroSeleccionado) return;
+    const codigosGiro = GIROS[giroSeleccionado].map(c=>String(c));
+    const iconEstrella = crearIconoEstrella();
+
+    denueData.forEach(d => {
+      const muniNorm = normalizarTexto(d.nom_mun);
+      if (!(muniNorm===municipioDetectadoNorm||muniNorm.includes(municipioDetectadoNorm)||municipioDetectadoNorm.includes(muniNorm))) return;
+      const code = String(d.codigo_act||"").replace(/\D/g,'');
+      if (!codigosGiro.includes(code)) return;
+
+      const mk = L.marker([d.latitud,d.longitud], {icon:iconEstrella})
+        .bindPopup(`<b>${d.nom_estab||'Sin nombre'}</b><br>${d.nombre_act||''}<br>${d.nom_mun||''}<br>SCIAN: ${d.codigo_act||''}`);
+      mk.addTo(layerProspectos);
+    });
+    actualizarLeyenda();
+  }
+
+  function cargarDENUE() {
+    document.getElementById('status').textContent = "Cargando base DENUE...";
+    denueData = [];
+    let totalProcesadas = 0;
+    const iconEstrella = crearIconoEstrella();
+    const buffer = [];
+
+    Papa.parse(URL_DENUE_CSV, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      step: function(results, parser) {
+        const r = results.data;
+        const lat=parseFloat(r.latitud||r.LATITUD||r.Latitud||r.Latitud_de||r.Lat);
+        const lon=parseFloat(r.longitud||r.LONGITUD||r.Longitud||r.Long);
+        if (!isNaN(lat)&&!isNaN(lon)) {
+          const d={nom_estab:r.nom_estab||r.NOMBRE_ESTAB||"",codigo_act:r.codigo_act||r.CODIGO_ACT||"",nombre_act:r.nombre_act||r.NOMBRE_ACT||"",latitud:lat,longitud:lon,nom_mun:r.nom_mun||r.NOM_MUN||r.municipio||"",nom_loc:r.nom_loc||r.NOM_LOC||r.localidad||"",raw:r};
+          denueData.push(d);
+
+          if (municipioDetectadoNorm && giroSeleccionado) {
+            const muniNorm=normalizarTexto(d.nom_mun);
+            const code=String(d.codigo_act||"").replace(/\D/g,'');
+            if ((muniNorm===municipioDetectadoNorm||muniNorm.includes(municipioDetectadoNorm)||municipioDetectadoNorm.includes(muniNorm))&&GIROS[giroSeleccionado].map(c=>String(c)).includes(code)) {
+              buffer.push(d);
+            }
+          }
+        }
+        totalProcesadas++;
+        if (totalProcesadas%500===0) {
+          document.getElementById('status').textContent = `Procesadas ${totalProcesadas} filas de DENUE...`;
+          buffer.forEach(r=>{
+            const mk=L.marker([r.latitud,r.longitud],{icon:iconEstrella})
+              .bindPopup(`<b>${r.nom_estab||'Sin nombre'}</b><br>${r.nombre_act||''}<br>${r.nom_mun||''}<br>SCIAN: ${r.codigo_act||''}`);
+            mk.addTo(layerProspectos);
+          });
+          buffer.length=0;
+        }
+      },
+      complete:function() {
+        buffer.forEach(r=>{
+          const mk=L.marker([r.latitud,r.longitud],{icon:iconEstrella})
+            .bindPopup(`<b>${r.nom_estab||'Sin nombre'}</b><br>${r.nombre_act||''}<br>${r.nom_mun||''}<br>SCIAN: ${r.codigo_act||''}`);
+          mk.addTo(layerProspectos);
+        });
+        buffer.length=0;
+        document.getElementById('status').textContent=`DENUE cargada: ${denueData.length} registros`;
+        actualizarProspectosEnMapa();
+        try { const group=L.featureGroup([...layerVendedores.getLayers(),...layerProspectos.getLayers()]); map.fitBounds(group.getBounds().pad(0.1)); } catch(e){console.warn(e);}
+        actualizarLeyenda();
+      },
+      error:function(err){console.error(err); document.getElementById('status').textContent="Error cargando DENUE";}
+    });
+  }
+
+  // ====================== DETECCIÓN MUNICIPIO ======================
+  async function detectarMunicipio() {
+    if (!navigator.geolocation) { document.getElementById('status').textContent="Geolocalización no disponible"; return; }
+    document.getElementById('status').textContent="Detectando ubicación...";
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const lat=pos.coords.latitude, lon=pos.coords.longitude;
+      map.setView([lat, lon],12);
+      try {
+        const rsp=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`);
+        const data=await rsp.json();
+        const addr=data && data.address ? data.address : {};
+        const muni=addr.city||addr.town||addr.village||addr.county||addr.state_district||addr.county||addr.municipality||addr.county;
+        municipioDetectadoNorm=normalizarTexto(muni||"");
+        document.getElementById('status').textContent = municipioDetectadoNorm?`Municipio detectado: ${muni}`:"Municipio no detectado";
+      } catch(err){console.error(err); document.getElementById('status').textContent="No fue posible detectar municipio";}
+    }, err=>{console.error(err); document.getElementById('status').textContent="Permiso de ubicación denegado o error";},{enableHighAccuracy:false, timeout:10000});
+  }
+
+  // ====================== BOTONES ======================
+  document.getElementById('buscarBtn').addEventListener('click', actualizarProspectosEnMapa);
+  document.getElementById('limpiarBtn').addEventListener('click', ()=>{ layerProspectos.clearLayers(); document.getElementById('status').textContent="Prospectos limpiados"; actualizarLeyenda(); });
+
+  // ====================== LEYENDA ======================
+  function actualizarLeyenda() {
+    const legend=document.getElementById('legend'); legend.innerHTML="";
+    Object.keys(vendorColorMap).forEach(v=>{
+      const color=vendorColorMap[v];
+      const div=document.createElement('div'); div.className='legend-item';
+      const box=document.createElement('div'); box.className='legend-color'; box.style.backgroundColor=color;
+      div.appendChild(box); div.appendChild(document.createTextNode(v));
+      legend.appendChild(div);
+    });
+    const p=document.createElement('div'); p.className='legend-item';
+    const star=document.createElement('div'); star.className='legend-star';
+    star.innerHTML=`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
+      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="#FFD700" stroke="#E6B800" stroke-width="0.6"/>
+    </svg>`;
+    p.appendChild(star); p.appendChild(document.createTextNode("Prospectos (DENUE)"));
+    legend.appendChild(p);
+  }
+
+  // ====================== INICIO ======================
+  cargarVendedores();
+  cargarDENUE();
+  detectarMunicipio();
+  </script>
+</body>
+</html>
