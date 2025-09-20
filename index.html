@@ -2,13 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Mapa: Vendedores + Prospectos (DENUE por Giro)</title>
+  <title>Mapa: Vendedores + Prospectos (DENUE)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
     html,body,#map { height: 100%; margin:0; padding:0; }
     #map { height: 100vh; }
 
+    /* Panel superior derecho (giro + botones) */
     .panel {
       position: absolute;
       top: 10px;
@@ -23,11 +24,14 @@
     }
     .panel select, .panel button {
       width: 100%;
-      margin-top:6px;
-      padding:6px;
+      margin-top:4px;
+      padding:4px;
+      font-size: 12px;
       box-sizing: border-box;
     }
+    .panel label { font-size:13px; }
 
+    /* Leyenda inferior derecha */
     .legend {
       position: absolute;
       bottom: 10px;
@@ -56,23 +60,28 @@
 <body>
   <div id="map"></div>
 
+  <!-- Panel: giro + botones -->
   <div class="panel" id="panel">
     <label for="giroSelect"><strong>Giro (prospectos)</strong></label>
     <select id="giroSelect">
       <option value="">-- Selecciona un giro --</option>
     </select>
-    <button id="buscarBtn">Buscar por giro</button>
+    <button id="buscarBtn">Buscar prospectos</button>
     <button id="limpiarBtn">Limpiar prospectos</button>
     <div id="status" style="margin-top:6px; font-size:12px; color:#333;"></div>
   </div>
 
+  <!-- Leyenda -->
   <div class="legend" id="legend"></div>
 
+  <!-- Librerías -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
   <script>
-  // CSV URLs
+  /*************************************************************************
+   * Configuración: URLs de CSV y giros
+   *************************************************************************/
   const URL_VENDEDORES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
   const URL_DENUE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSK87ymKaIGki4st8Fu8NIruKQEuKFR_rrfueefbJ3QFLVAjIGt5E6tBy2v1nhGBh9npPKZp6cRQDc/pub?output=csv";
 
@@ -90,6 +99,9 @@
     "Suministros industriales": [332991, 332710]
   };
 
+  /*************************************************************************
+   * Utilidades
+   *************************************************************************/
   function normalizarTexto(txt) {
     if (!txt && txt !== 0) return "";
     return String(txt)
@@ -125,7 +137,10 @@
     });
   }
 
-  const map = L.map('map').setView([24.8, -107.4], 7); // vista inicial Sinaloa
+  /*************************************************************************
+   * Inicialización del mapa y capas
+   *************************************************************************/
+  const map = L.map('map').setView([23.2329, -106.4062], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
@@ -137,7 +152,9 @@
   let vendedoresData = [];
   const vendorColorMap = {};
 
-  // Llenar select de giros
+  /*************************************************************************
+   * Llenar el desplegable de giros
+   *************************************************************************/
   const giroSelect = document.getElementById('giroSelect');
   Object.keys(GIROS).forEach(nombre => {
     const opt = document.createElement('option');
@@ -146,8 +163,13 @@
     giroSelect.appendChild(opt);
   });
 
+  /*************************************************************************
+   * Cargar vendedores
+   *************************************************************************/
   function valorFila(row, keys) {
-    for (const k of keys) if (row[k] !== undefined) return row[k];
+    for (const k of keys) {
+      if (row[k] !== undefined) return row[k];
+    }
     return "";
   }
 
@@ -160,7 +182,10 @@
         const rows = results.data;
         vendedoresData = rows;
         renderVendedores(rows);
-        console.log("Vendedores cargados:", rows.length);
+      },
+      error(err) {
+        console.error("Error cargando vendedores:", err);
+        document.getElementById('status').textContent = "Error cargando vendedores";
       }
     });
   }
@@ -169,6 +194,7 @@
     layerVendedores.clearLayers();
     let colorIndex = 0;
     const palette = ["red","orange","yellow","blue","grey","black","green","violet","pink","cadetblue"];
+
     rows.forEach(r => {
       const nombreV = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || valorFila(r, ["vendedor","Vendedor"]) || "Sin vendedor";
       const coordStr = valorFila(r, ["COORDENADAS","coordenadas","Coordenadas"]) || "";
@@ -183,7 +209,11 @@
       if (isNaN(lat) || isNaN(lon)) return;
 
       let colorName = vendorColorMap[nombreV];
-      if (!colorName) { colorName = palette[colorIndex % palette.length]; vendorColorMap[nombreV] = colorName; colorIndex++; }
+      if (!colorName) {
+        colorName = palette[colorIndex % palette.length];
+        vendorColorMap[nombreV] = colorName;
+        colorIndex++;
+      }
 
       const marker = L.marker([lat, lon], { icon: crearIconoColor(colorName) });
       const cliente = valorFila(r, ["NOMBRE CLIENTE","NOMBRE_CLIENTE","nombre cliente","nom_estab"]) || "";
@@ -195,9 +225,13 @@
       marker.bindPopup(`<b>Vendedor:</b> ${nombreV}<br><b>Fecha:</b> ${fecha}<br><b>Cliente:</b> ${cliente}<br><b>Giro:</b> ${giro}<br><b>Motivo:</b> ${motivo}<br><b>Obs:</b> ${obs}`);
       marker.addTo(layerVendedores);
     });
+
     actualizarLeyenda();
   }
 
+  /*************************************************************************
+   * Cargar DENUE
+   *************************************************************************/
   function cargarDENUE() {
     document.getElementById('status').textContent = "Cargando base DENUE...";
     Papa.parse(URL_DENUE_CSV, {
@@ -206,18 +240,27 @@
       skipEmptyLines: true,
       complete(results) {
         denueData = results.data.map(r => ({
-          nom_estab: r.nom_estab || r.NOMBRE_ESTAB || "",
-          codigo_act: r.codigo_act || r.CODIGO_ACT || "",
-          nombre_act: r.nombre_act || r.NOMBRE_ACT || "",
-          latitud: parseFloat(r.latitud || r.LATITUD),
-          longitud: parseFloat(r.longitud || r.LONGITUD),
+          nom_estab: r.nom_estab || "",
+          raz_social: r.raz_social || "",
+          codigo_act: r.codigo_act || "",
+          nombre_act: r.nombre_act || "",
+          latitud: parseFloat(r.latitud),
+          longitud: parseFloat(r.longitud),
           raw: r
         })).filter(d => !isNaN(d.latitud) && !isNaN(d.longitud));
+
         document.getElementById('status').textContent = `DENUE cargada: ${denueData.length} registros`;
+      },
+      error(err) {
+        console.error("Error cargando DENUE:", err);
+        document.getElementById('status').textContent = "Error cargando DENUE";
       }
     });
   }
 
+  /*************************************************************************
+   * Buscar prospectos: todos los negocios del giro en el mapa
+   *************************************************************************/
   function buscarProspectos() {
     layerProspectos.clearLayers();
     const giroNombre = giroSelect.value;
@@ -234,8 +277,21 @@
 
     const iconEstrella = crearIconoEstrella();
     resultados.forEach(r => {
+      const direccion = [
+        r.raw.tipo_vial || "", r.raw.nom_vial || "",
+        r.raw.numero_ext || "", r.raw.letra_ext || "",
+        r.raw.nomb_asent || "", r.raw.municipio || "",
+        r.raw.cod_postal || ""
+      ].filter(s=>s).join("\n");
+
+      const popupHTML = `<b>Nombre del negocio:</b> ${r.nom_estab || 'N/A'}<br>
+                         <b>Nombre fiscal:</b> ${r.raz_social || 'N/A'}<br>
+                         <b>Dirección:</b><br>${direccion.replace(/,/g,' ')}<br>
+                         <b>Teléfono:</b> ${r.raw.telefono || 'N/A'}<br>
+                         <b>SCIAN:</b> ${r.codigo_act || ''}`;
+
       const mk = L.marker([r.latitud, r.longitud], { icon: iconEstrella })
-        .bindPopup(`<b>${r.nom_estab || 'Sin nombre'}</b><br>${r.nombre_act || ''}<br>SCIAN: ${r.codigo_act || ''}`);
+        .bindPopup(popupHTML);
       mk.addTo(layerProspectos);
     });
 
@@ -249,6 +305,9 @@
     actualizarLeyenda();
   }
 
+  /*************************************************************************
+   * Leyenda
+   *************************************************************************/
   function actualizarLeyenda() {
     const legend = document.getElementById('legend');
     legend.innerHTML = "";
@@ -277,11 +336,18 @@
     legend.appendChild(p);
   }
 
+  /*************************************************************************
+   * Eventos
+   *************************************************************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
   document.getElementById('limpiarBtn').addEventListener('click', limpiarProspectos);
 
+  /*************************************************************************
+   * Inicio
+   *************************************************************************/
   cargarVendedores();
   cargarDENUE();
+
   </script>
 </body>
 </html>
