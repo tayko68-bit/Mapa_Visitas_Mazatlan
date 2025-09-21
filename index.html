@@ -22,13 +22,16 @@
       z-index: 1000;
       min-width: 210px;
     }
-    .panel select, .panel button {
-      width: 100%;
-      margin-top:6px;
-      padding:6px;
-      box-sizing: border-box;
-      font-size: 14px;
-    }
+   .panel select, .panel button {
+  width: 14vw;          /* proporcional al ancho de la pantalla */
+  max-width: 280px;     /* no crecer más de ~7 cm en pantallas muy grandes */
+  min-width: 200px;     /* no bajar demasiado en pantallas pequeñas */
+  margin-top:6px;
+  padding:6px;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+
 
     /* Leyenda inferior derecha */
     .legend {
