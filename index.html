@@ -11,30 +11,31 @@
   <style>
     #map { height: 100vh; }
 
-    /* Caja de controles */
-    #controls {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: white;
-      padding: 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    }
+   #controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: white;
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  width: 260px;          /* ancho de la caja ≈ 7 cm */
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
 
-    /* Cuadro de búsqueda */
-    #search-input {
-      padding: 5px;
-      font-size: 14px;
-    }
+#search-input {
+  flex: 1;
+  margin-bottom: 8px;
+}
 
-    /* Botones */
-    #search-btn, #clear-btn {
-      padding: 5px 10px;
-      margin-left: 5px;
-      cursor: pointer;
-      font-size: 14px;
-    }
+#search-btn, #clear-btn {
+  width: 110px;          /* ancho fijo botones */
+  padding: 6px;
+  cursor: pointer;
+}
+
 
     /* Leyenda */
     .legend {
