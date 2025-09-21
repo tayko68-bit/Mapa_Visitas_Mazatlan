@@ -9,29 +9,52 @@
     html,body,#map { height: 100%; margin:0; padding:0; }
     #map { height: 100vh; }
 
-    /* Panel superior derecho */
+    /* Panel superior derecho (plegable) */
     .panel {
       position: absolute;
       top: 10px;
       right: 10px;
       background: rgba(255,255,255,0.95);
-      padding: 8px;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.25);
       font-family: sans-serif;
       z-index: 1000;
-      min-width: 210px;
+      width: 240px;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
     }
-   .panel select, .panel button {
-  width: 14vw;          /* proporcional al ancho de la pantalla */
-  max-width: 280px;     /* no crecer más de ~7 cm en pantallas muy grandes */
-  min-width: 200px;     /* no bajar demasiado en pantallas pequeñas */
-  margin-top:6px;
-  padding:6px;
-  box-sizing: border-box;
-  font-size: 14px;
-}
 
+    .panel-header {
+      padding: 6px 10px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-content {
+      padding: 8px 10px;
+    }
+
+    .panel.collapsed {
+      max-height: 36px; /* solo la cabecera visible */
+    }
+
+    .panel.expanded {
+      max-height: 400px; /* suficiente para mostrar todo */
+    }
+
+    .panel select, .panel button {
+      width: 14vw;          /* proporcional al ancho */
+      max-width: 280px;     /* no crecer más de ~7cm */
+      min-width: 200px;     /* no bajar demasiado */
+      margin-top:6px;
+      padding:6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
 
     /* Leyenda inferior derecha */
     .legend {
@@ -62,14 +85,20 @@
 <body>
   <div id="map"></div>
 
+  <!-- Panel plegable -->
   <div class="panel" id="panel">
-    <label for="giroSelect"><strong>Giro (prospectos)</strong></label>
-    <select id="giroSelect">
-      <option value="">-- Selecciona un giro --</option>
-    </select>
-    <button id="buscarBtn">Buscar (en mapa)</button>
-    <button id="limpiarBtn">Limpiar prospectos</button>
-    <div id="status" style="margin-top:6px; font-size:12px; color:#333;"></div>
+    <div class="panel-header" id="panelToggle">
+      🔍 Buscar prospectos <span id="arrow">▶</span>
+    </div>
+    <div class="panel-content">
+      <label for="giroSelect"><strong>Giro</strong></label>
+      <select id="giroSelect">
+        <option value="">-- Selecciona un giro --</option>
+      </select>
+      <button id="buscarBtn">Buscar</button>
+      <button id="limpiarBtn">Limpiar</button>
+      <div id="status" style="margin-top:6px; font-size:12px; color:#333;"></div>
+    </div>
   </div>
 
   <div class="legend" id="legend"></div>
@@ -280,7 +309,11 @@
     actualizarLeyenda();
   }
 
-  function limpiarProspectos(){ layerProspectos.clearLayers(); document.getElementById('status').textContent="Prospectos limpiados"; actualizarLeyenda(); }
+  function limpiarProspectos(){ 
+    layerProspectos.clearLayers(); 
+    document.getElementById('status').textContent="Prospectos limpiados"; 
+    actualizarLeyenda(); 
+  }
 
   /************************ LEYENDA ************************/
   function actualizarLeyenda(){
@@ -311,6 +344,23 @@
   /************************ EVENTOS ************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
   document.getElementById('limpiarBtn').addEventListener('click', limpiarProspectos);
+
+  // Toggle panel plegable
+  const panel = document.getElementById('panel');
+  const toggle = document.getElementById('panelToggle');
+  const arrow = document.getElementById('arrow');
+  panel.classList.add('collapsed');
+  toggle.addEventListener('click', () => {
+    if (panel.classList.contains('collapsed')) {
+      panel.classList.remove('collapsed');
+      panel.classList.add('expanded');
+      arrow.textContent = "▼";
+    } else {
+      panel.classList.remove('expanded');
+      panel.classList.add('collapsed');
+      arrow.textContent = "▶";
+    }
+  });
 
   /************************ INICIO ************************/
   cargarVendedores();
