@@ -1,318 +1,160 @@
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa: Vendedores + Prospectos (DENUE)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    html,body,#map { height: 100%; margin:0; padding:0; }
+    #map { height: 100vh; }
 
-<script>
-/************************ CONFIG ************************/
-const URL_VENDEDORES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
-const URL_DENUE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSK87ymKaIGki4st8Fu8NIruKQEuKFR_rrfueefbJ3QFLVAjIGt5E6tBy2v1nhGBh9npPKZp6cRQDc/pub?output=csv";
-
-const GIROS = {
-  "Ferreterías": [467111, 467112, 467113],
-  "Automotriz y refacciones": [468211, 468212, 811191, 811192],
-  "Eléctricas e instalaciones": [238221, 467121],
-  "Aluminio y metalmecánica": [238322, 332322, 332710, 332991],
-  "Rotulación y construcción ligera": [323111, 238390],
-  "Agrícolas y maquinaria": [333111, 333112, 811310, 461110, 461120],
-  "Talleres mecánicos": [811191, 811192],
-  "Refacciones automotrices": [468211, 468212],
-  "Alumineros / carp. aluminio": [332322],
-  "Instaladores de rótulos": [323111],
-  "Suministros industriales": [332991, 332710]
-};
-
-// Paleta de colores para vendedores (amplia, 20 colores)
-const COLOR_PALETTE = [
-  "#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3",
-  "#33FFF3", "#FF8C33", "#8C33FF", "#33FF8C", "#FF338C",
-  "#8CFF33", "#338CFF", "#FF33A8", "#A8FF33", "#33A8FF",
-  "#FFD700", "#8A2BE2", "#20B2AA", "#FF69B4", "#7CFC00"
-];
-
-/************************ UTILIDADES ************************/
-function normalizarTexto(txt) {
-  if (!txt && txt !== 0) return "";
-  return String(txt)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase()
-    .trim();
-}
-
-function valorFila(row, keys) {
-  for (const k of keys) {
-    if (row[k] !== undefined) return row[k];
-  }
-  return "";
-}
-
-function crearIconoEstrella() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
-    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9"
-      fill="#FFD700" stroke="#E6B800" stroke-width="0.7"/>
-  </svg>`;
-  return L.divIcon({
-    html: `<div style="width:22px;height:22px;">${svg}</div>`,
-    className: '',
-    iconSize: [22,22],
-    iconAnchor: [11,22],
-    popupAnchor: [0,-18]
-  });
-}
-
-function crearIconoColor(colorHex) {
-  // Usamos un generador de marcadores personalizados por color
-  return L.divIcon({
-    html: `<div style="background:${colorHex}; width:16px; height:16px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 4px #0004;"></div>`,
-    className: '',
-    iconSize: [16,16],
-    iconAnchor: [8,8],
-    popupAnchor: [0,-10]
-  });
-}
-
-/************************ MAPA Y CAPAS ************************/
-const map = L.map('map').setView([23.2329, -106.4062], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-const layerVendedores = L.layerGroup().addTo(map);
-const layerProspectos = L.layerGroup().addTo(map);
-
-let denueData = [];
-let vendedoresData = [];
-let vendorColorMap = {}; // Mapa: nombre_normalizado → color_hex
-
-/************************ EXTRAER VENDEDORES ÚNICOS Y ASIGNAR COLORES ************************/
-function extraerVendedoresUnicos(rows) {
-  const nombresSet = new Set();
-  rows.forEach(r => {
-    const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
-    const nombreV = normalizarTexto(nombreVRaw);
-    if (nombreV && nombreV !== "sin vendedor") {
-      nombresSet.add(nombreV);
-    }
-  });
-
-  // Convertir a array y ordenar para consistencia
-  const nombresUnicos = Array.from(nombresSet).sort();
-
-  // Asignar colores (reutilizando si hay más vendedores que colores)
-  vendorColorMap = {};
-  nombresUnicos.forEach((nombre, idx) => {
-    vendorColorMap[nombre] = COLOR_PALETTE[idx % COLOR_PALETTE.length];
-  });
-
-  return nombresUnicos;
-}
-
-/************************ RENDER VENDEDORES ************************/
-function renderVendedores(rows) {
-  layerVendedores.clearLayers();
-  const nombresUnicos = extraerVendedoresUnicos(rows);
-
-  rows.forEach(r => {
-    const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
-    const nombreV = normalizarTexto(nombreVRaw);
-    const coordStr = valorFila(r, ["COORDENADAS","coordenadas","Coordenadas"]) || "";
-    let lat = null, lon = null;
-
-    if (coordStr.includes(",")) {
-      const p = coordStr.split(",").map(s => s.trim());
-      lat = parseFloat(p[0]);
-      lon = parseFloat(p[1]);
-    } else {
-      lat = parseFloat(valorFila(r, ["latitud","LATITUD","Latitud"]));
-      lon = parseFloat(valorFila(r, ["longitud","LONGITUD","Longitud"]));
+    /* Panel superior derecho (plegable) */
+    .panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      font-family: sans-serif;
+      z-index: 1000;
+      width: 240px;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
     }
 
-    if (isNaN(lat) || isNaN(lon)) return;
-
-    const color = vendorColorMap[nombreV] || "#888";
-    const marker = L.marker([lat, lon], { icon: crearIconoColor(color) });
-
-    const cliente = valorFila(r, ["NOMBRE CLIENTE","NOMBRE_CLIENTE","nombre cliente","nom_estab"]) || "";
-    const fecha = valorFila(r, ["FECHA","fecha"]) || "";
-    const giro = valorFila(r, ["GIRO","giro"]) || "";
-    const motivo = valorFila(r, ["MOTIVO","motivo"]) || "";
-    const obs = valorFila(r, ["OBSERVACIONES","observaciones"]) || "";
-
-    marker.bindPopup(
-      `<b>Vendedor:</b> ${nombreVRaw}<br>
-       <b>Fecha:</b> ${fecha}<br>
-       <b>Cliente:</b> ${cliente}<br>
-       <b>Giro:</b> ${giro}<br>
-       <b>Motivo:</b> ${motivo}<br>
-       <b>Obs:</b> ${obs}`
-    );
-    marker.addTo(layerVendedores);
-  });
-
-  actualizarLeyenda();
-}
-
-/************************ CARGAR VENDEDORES ************************/
-function cargarVendedores() {
-  Papa.parse(URL_VENDEDORES_CSV, {
-    download: true,
-    header: true,
-    skipEmptyLines: true,
-    complete(results) {
-      vendedoresData = results.data;
-      renderVendedores(vendedoresData);
-      console.log("Vendedores cargados:", vendedoresData.length);
-    },
-    error(err) {
-      console.error(err);
-      document.getElementById('status').textContent = "Error cargando vendedores";
+    .panel-header {
+      padding: 6px 10px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-  });
-}
 
-/************************ CARGAR DENUE ************************/
-function cargarDENUE() {
-  document.getElementById('status').textContent = "Cargando base DENUE...";
-  Papa.parse(URL_DENUE_CSV, {
-    download: true,
-    header: true,
-    skipEmptyLines: true,
-    complete(results) {
-      denueData = results.data.map(r => ({
-        nom_estab: r.nom_estab || r.NOMBRE_ESTAB || "",
-        raz_social: r.raz_social || "",
-        codigo_act: r.codigo_act || "",
-        nombre_act: r.nombre_act || "",
-        latitud: parseFloat(r.latitud),
-        longitud: parseFloat(r.longitud),
-        telefono: r.telefono || "",
-        direccion: `${r.tipo_vial || ""} ${r.nom_vial || ""} ${r.numero_ext || ""} ${r.letra_ext || ""}`.trim()
-      })).filter(d => !isNaN(d.latitud) && !isNaN(d.longitud));
-
-      document.getElementById('status').textContent = `DENUE cargada: ${denueData.length} registros`;
-    },
-    error(err) {
-      console.error(err);
-      document.getElementById('status').textContent = "Error cargando DENUE";
+    .panel-content {
+      padding: 8px 10px;
     }
-  });
-}
 
-/************************ LLENAR GIROS ************************/
-const giroSelect = document.getElementById('giroSelect');
-Object.keys(GIROS).forEach(nombre => {
-  const opt = document.createElement('option');
-  opt.value = nombre;
-  opt.textContent = nombre;
-  giroSelect.appendChild(opt);
-});
+    .panel.collapsed {
+      max-height: 36px; /* solo la cabecera visible */
+    }
 
-/************************ BUSCAR PROSPECTOS ************************/
-function buscarProspectos() {
-  layerProspectos.clearLayers();
-  const giroNombre = giroSelect.value;
-  if (!giroNombre) {
-    document.getElementById('status').textContent = "Selecciona un giro primero";
-    return;
+    .panel.expanded {
+      max-height: 400px; /* suficiente para mostrar todo */
+    }
+
+    .panel select, .panel button {
+      width: 14vw;          /* proporcional al ancho */
+      max-width: 280px;     /* no crecer más de ~7cm */
+      min-width: 200px;     /* no bajar demasiado */
+      margin-top:6px;
+      padding:6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    /* Leyenda inferior derecha */
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 13px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      z-index: 1000;
+      max-height: 40vh;
+      overflow-y: auto;
+      min-width:150px;
+    }
+    .legend-item { display:flex; align-items:center; margin-bottom:6px; }
+    .legend-color {
+      width:16px; height:16px; margin-right:8px; border-radius:50%; border:1px solid #00000040;
+      flex:0 0 16px;
+    }
+    .legend-star {
+      width:18px; height:18px; margin-right:8px; display:inline-block; flex:0 0 18px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Panel plegable -->
+  <div class="panel" id="panel">
+    <div class="panel-header" id="panelToggle">
+      🔍 Buscar prospectos <span id="arrow">▶</span>
+    </div>
+    <div class="panel-content">
+      <label for="giroSelect"><strong>Giro</strong></label>
+      <select id="giroSelect">
+        <option value="">-- Selecciona un giro --</option>
+      </select>
+      <button id="buscarBtn">Buscar</button>
+      <button id="limpiarBtn">Limpiar</button>
+      <div id="status" style="margin-top:6px; font-size:12px; color:#333;"></div>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+  /************************ CONFIG ************************/
+  const URL_VENDEDORES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTXTg3eVA6lC3oGm3z6P5px1356YcDS0BWv7impbzpNpBJXBlzqgpNkz5nlcKNS2y859diJCY93tqzD/pub?output=csv";
+  const URL_DENUE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSK87ymKaIGki4st8Fu8NIruKQEuKFR_rrfueefbJ3QFLVAjIGt5E6tBy2v1nhGBh9npPKZp6cRQDc/pub?output=csv";
+
+  const GIROS = {
+    "Ferreterías": [467111, 467112, 467113],
+    "Automotriz y refacciones": [468211, 468212, 811191, 811192],
+    "Eléctricas e instalaciones": [238221, 467121],
+    "Aluminio y metalmecánica": [238322, 332322, 332710, 332991],
+    "Rotulación y construcción ligera": [323111, 238390],
+    "Agrícolas y maquinaria": [333111, 333112, 811310, 461110, 461120],
+    "Talleres mecánicos": [811191, 811192],
+    "Refacciones automotrices": [468211, 468212],
+    "Alumineros / carp. aluminio": [332322],
+    "Instaladores de rótulos": [323111],
+    "Suministros industriales": [332991, 332710]
+  };
+
+  // Paleta de colores para vendedores (amplia, 20 colores)
+  const COLOR_PALETTE = [
+    "#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3",
+    "#33FFF3", "#FF8C33", "#8C33FF", "#33FF8C", "#FF338C",
+    "#8CFF33", "#338CFF", "#FF33A8", "#A8FF33", "#33A8FF",
+    "#FFD700", "#8A2BE2", "#20B2AA", "#FF69B4", "#7CFC00"
+  ];
+
+  /************************ UTILIDADES ************************/
+  function normalizarTexto(txt) {
+    if (!txt && txt !== 0) return "";
+    return String(txt)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .trim();
   }
-  const codigos = GIROS[giroNombre].map(c => String(c));
 
-  const resultados = denueData.filter(d => {
-    const code = String(d.codigo_act || "").replace(/\D/g, '');
-    return codigos.includes(code);
-  });
-
-  const iconEstrella = crearIconoEstrella();
-  resultados.forEach(r => {
-    const mk = L.marker([r.latitud, r.longitud], { icon: iconEstrella })
-      .bindPopup(
-        `<b>${r.nom_estab || 'Sin nombre'}</b><br>
-         <b>Razón social:</b> ${r.raz_social || ''}<br>
-         <b>Dirección:</b> ${r.direccion || ''}<br>
-         <b>Teléfono:</b> ${r.telefono || ''}<br>
-         <b>SCIAN:</b> ${r.codigo_act || ''}`
-      );
-    mk.addTo(layerProspectos);
-  });
-
-  document.getElementById('status').textContent = `${resultados.length} prospectos encontrados`;
-  actualizarLeyenda();
-}
-
-function limpiarProspectos() {
-  layerProspectos.clearLayers();
-  document.getElementById('status').textContent = "Prospectos limpiados";
-  actualizarLeyenda();
-}
-
-/************************ LEYENDA DINÁMICA ************************/
-function actualizarLeyenda() {
-  const legend = document.getElementById('legend');
-  legend.innerHTML = "";
-
-  // Ordenar por nombre normalizado
-  const sortedVendedores = Object.keys(vendorColorMap).sort();
-
-  sortedVendedores.forEach(nombreV => {
-    const color = vendorColorMap[nombreV];
-    const div = document.createElement('div');
-    div.className = 'legend-item';
-
-    const box = document.createElement('div');
-    box.className = 'legend-color';
-    box.style.backgroundColor = color;
-    div.appendChild(box);
-
-    // Mostrar el nombre tal como aparece en el CSV (no normalizado)
-    const nombreOriginal = vendedoresData.find(r => normalizarTexto(valorFila(r, ["NOMBRE VENDEDOR", "nombre vendedor"])) === nombreV);
-    const nombreMostrar = nombreOriginal ? valorFila(nombreOriginal, ["NOMBRE VENDEDOR", "nombre vendedor"]) : nombreV;
-
-    div.appendChild(document.createTextNode(nombreMostrar));
-    legend.appendChild(div);
-  });
-
-  // Separador
-  if (sortedVendedores.length > 0) {
-    const hr = document.createElement('hr');
-    hr.style.margin = "6px 0";
-    legend.appendChild(hr);
+  function valorFila(row, keys) {
+    for (const k of keys) {
+      if (row[k] !== undefined) return row[k];
+    }
+    return "";
   }
 
-  // Leyenda para prospectos
-  const p = document.createElement('div');
-  p.className = 'legend-item';
-  const star = document.createElement('div');
-  star.className = 'legend-star';
-  star.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-    <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="#FFD700" stroke="#E6B800" stroke-width="0.6"/>
-  </svg>`;
-  p.appendChild(star);
-  p.appendChild(document.createTextNode("Prospectos (DENUE)"));
-  legend.appendChild(p);
-}
-
-/************************ EVENTOS ************************/
-document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
-document.getElementById('limpiarBtn').addEventListener('click', limpiarProspectos);
-
-// Toggle panel plegable
-const panel = document.getElementById('panel');
-const toggle = document.getElementById('panelToggle');
-const arrow = document.getElementById('arrow');
-panel.classList.add('collapsed');
-toggle.addEventListener('click', () => {
-  if (panel.classList.contains('collapsed')) {
-    panel.classList.remove('collapsed');
-    panel.classList.add('expanded');
-    arrow.textContent = "▼";
-  } else {
-    panel.classList.remove('expanded');
-    panel.classList.add('collapsed');
-    arrow.textContent = "▶";
-  }
-});
-
-/************************ INICIO ************************/
-cargarVendedores();
-cargarDENUE();
-</script>
+  function crearIconoEstrella() {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9"
+        fill="#FFD700" stroke="#E6B800" stroke-width="0.7"/>
+    </svg>`;
+    return L.divIcon({
+      html: `<div 
