@@ -347,7 +347,8 @@
   }
 
   /************************ LEYENDA ************************/
-  function actualizarLeyenda() {
+
+    function actualizarLeyenda() {
   const legend = document.getElementById('legend');
   legend.innerHTML = "";
 
@@ -372,14 +373,14 @@
     const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
     let fecha = null;
 
-    // 🔽 Parsear fecha con formatos comunes
-    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaRaw.trim())) {
-      fecha = new Date(fechaRaw.trim());
-    } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(fechaRaw.trim())) {
-      const [dia, mes, anio] = fechaRaw.trim().split('/');
-      fecha = new Date(anio, mes - 1, dia); // mes es 0-indexado
+    // 🔽 Parsear formato específico: "6/9/2025 10:22:37" → d/m/Y H:i:s
+    const match = fechaRaw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const [, dia, mes, anio, hora, min, seg] = match;
+      fecha = new Date(anio, mes - 1, dia, hora, min, seg); // mes es 0-indexado
     } else {
-      fecha = new Date(fechaRaw.trim()); // fallback
+      // Fallback para otros formatos (como YYYY-MM-DD)
+      fecha = new Date(fechaRaw.trim());
     }
 
     // 🔽 Validar fecha válida
@@ -387,14 +388,21 @@
       return; // ignorar registros con fecha inválida
     }
 
+    // 🔽 Normalizar para comparación: hoy y mes actual
     const hoy = new Date();
-    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    hoy.setHours(0, 0, 0, 0); // inicio del día
 
-    // Solo contar si la fecha es en el mes actual o hoy
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1, 0, 0, 0);
+    const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59); // último día del mes
+
+    // Comparar solo la parte del día para "hoy"
+    const fechaInicioDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 0, 0, 0);
+    const esHoy = fechaInicioDia.getTime() === hoy.getTime();
+
+    // Contar solo si está en el mes actual
     if (fecha >= inicioMes && fecha <= finMes) {
       contadores[nombreV].mes++;
-      if (fecha.toDateString() === hoy.toDateString()) {
+      if (esHoy) {
         contadores[nombreV].hoy++;
       }
     }
@@ -451,6 +459,10 @@
   p.appendChild(document.createTextNode(" Prospectos (DENUE)"));
   legend.appendChild(p);
 }
+
+
+
+
 
   /************************ EVENTOS ************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
