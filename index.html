@@ -39,17 +39,17 @@
     }
 
     .panel.collapsed {
-      max-height: 36px; /* solo la cabecera visible */
+      max-height: 36px;
     }
 
     .panel.expanded {
-      max-height: 400px; /* suficiente para mostrar todo */
+      max-height: 400px;
     }
 
     .panel select, .panel button {
-      width: 14vw;          /* proporcional al ancho */
-      max-width: 280px;     /* no crecer más de ~7cm */
-      min-width: 200px;     /* no bajar demasiado */
+      width: 14vw;
+      max-width: 280px;
+      min-width: 200px;
       margin-top:6px;
       padding:6px;
       box-sizing: border-box;
@@ -177,9 +177,8 @@
 
   let denueData = [];
   let vendedoresData = [];
-  const vendorColorMap = {};
+  let vendorColorMap = {};
 
-  /************************ CARGA Y RENDER VENDEDORES ************************/
   function valorFila(row, keys) {
     for (const k of keys) {
       if (row[k] !== undefined) return row[k];
@@ -187,10 +186,43 @@
     return "";
   }
 
+  /************************ CARGA Y RENDER VENDEDORES ************************/
   function renderVendedores(rows) {
     layerVendedores.clearLayers();
-    let colorIndex = 0;
+    const vendorSet = new Set();
+    const vendorList = [];
+
+    // Recolectar todos los vendedores únicos
+    rows.forEach(r => {
+      const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
+      const nombreV = normalizarTexto(nombreVRaw);
+      vendorSet.add(nombreV);
+    });
+
+    // Ordenar alfabéticamente
+    vendorList.push(...Array.from(vendorSet).sort());
+
+    // Asignar colores
     const palette = ["red","orange","yellow","blue","grey","black","green","violet","pink","cadetblue"];
+    let colorIndex = 0;
+    vendorColorMap = {};
+
+    vendorList.forEach(nombreV => {
+      if (FIXED_VENDOR_COLORS[nombreV]) {
+        vendorColorMap[nombreV] = FIXED_VENDOR_COLORS[nombreV];
+      } else {
+        let color = palette[colorIndex % palette.length];
+        // Evitar colores duplicados si hay más vendedores que colores
+        while (Object.values(vendorColorMap).includes(color) && colorIndex < palette.length * 2) {
+          colorIndex++;
+          color = palette[colorIndex % palette.length];
+        }
+        vendorColorMap[nombreV] = color;
+        colorIndex++;
+      }
+    });
+
+    // Renderizar marcadores
     rows.forEach(r => {
       const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
       const nombreV = normalizarTexto(nombreVRaw);
@@ -205,8 +237,7 @@
       }
       if(isNaN(lat)||isNaN(lon)) return;
 
-      const colorName = FIXED_VENDOR_COLORS[nombreV] || palette[colorIndex % palette.length];
-      vendorColorMap[nombreV] = colorName;
+      const colorName = vendorColorMap[nombreV];
 
       const marker = L.marker([lat, lon], { icon: crearIconoColor(colorName) });
       const cliente = valorFila(r, ["NOMBRE CLIENTE","NOMBRE_CLIENTE","nombre cliente","nom_estab"]) || "";
@@ -224,8 +255,8 @@
         <b>Obs:</b> ${obs}`
       );
       marker.addTo(layerVendedores);
-      colorIndex++;
     });
+
     actualizarLeyenda();
   }
 
@@ -319,16 +350,33 @@
   function actualizarLeyenda(){
     const legend = document.getElementById('legend');
     legend.innerHTML = "";
-    Object.keys(vendorColorMap).forEach(v=>{
+
+    // Ordenar alfabéticamente por nombre normalizado
+    const sortedVendors = Object.keys(vendorColorMap)
+      .sort((a, b) => a.localeCompare(b));
+
+    sortedVendors.forEach(nombreV => {
+      // Buscar el nombre original más representativo
+      let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
+      for (const r of vendedoresData) {
+        const raw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "";
+        if (normalizarTexto(raw) === nombreV) {
+          nombreOriginal = raw;
+          break;
+        }
+      }
+
       const div = document.createElement('div');
       div.className='legend-item';
       const box=document.createElement('div');
       box.className='legend-color';
-      box.style.backgroundColor = vendorColorMap[v];
+      box.style.backgroundColor = vendorColorMap[nombreV];
       div.appendChild(box);
-      div.appendChild(document.createTextNode(v));
+      div.appendChild(document.createTextNode(nombreOriginal));
       legend.appendChild(div);
     });
+
+    // Añadir prospectos
     const p=document.createElement('div');
     p.className='legend-item';
     const star=document.createElement('div');
