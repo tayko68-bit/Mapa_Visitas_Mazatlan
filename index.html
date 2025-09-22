@@ -347,40 +347,64 @@
   }
 
   /************************ LEYENDA ************************/
-  function actualizarLeyenda(){
+  function actualizarLeyenda() {
   const legend = document.getElementById('legend');
   legend.innerHTML = "";
 
-  // 🔽 NUEVO: Calcular contador para cada vendedor
+  // 🔴 Validar que los datos de vendedores estén cargados
+  if (!vendedoresData || vendedoresData.length === 0) {
+    legend.innerHTML = "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
+    return;
+  }
+
+  // 🔽 Calcular contador para cada vendedor
   const contadores = {};
+
   vendedoresData.forEach(r => {
     const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
     const nombreV = normalizarTexto(nombreVRaw);
 
-    // Contar solo si no está ya contado
+    // Inicializar contador si no existe
     if (!contadores[nombreV]) {
       contadores[nombreV] = { hoy: 0, mes: 0 };
     }
 
     const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
-    const fecha = new Date(fechaRaw);
+    let fecha = null;
+
+    // 🔽 Parsear fecha con formatos comunes
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaRaw.trim())) {
+      fecha = new Date(fechaRaw.trim());
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(fechaRaw.trim())) {
+      const [dia, mes, anio] = fechaRaw.trim().split('/');
+      fecha = new Date(anio, mes - 1, dia); // mes es 0-indexado
+    } else {
+      fecha = new Date(fechaRaw.trim()); // fallback
+    }
+
+    // 🔽 Validar fecha válida
+    if (isNaN(fecha.getTime())) {
+      return; // ignorar registros con fecha inválida
+    }
+
     const hoy = new Date();
     const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
 
-    if (!isNaN(fecha.getTime())) {
-      if (fecha >= inicioMes) {
-        contadores[nombreV].mes++;
-        if (fecha.toDateString() === hoy.toDateString()) {
-          contadores[nombreV].hoy++;
-        }
+    // Solo contar si la fecha es en el mes actual o hoy
+    if (fecha >= inicioMes && fecha <= finMes) {
+      contadores[nombreV].mes++;
+      if (fecha.toDateString() === hoy.toDateString()) {
+        contadores[nombreV].hoy++;
       }
     }
   });
 
-  // Ordenar alfabéticamente
+  // 🔽 Ordenar vendedores alfabéticamente
   const sortedVendors = Object.keys(vendorColorMap).sort();
 
   sortedVendors.forEach(nombreV => {
+    // Buscar el nombre original (no normalizado) para mostrar en leyenda
     let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
     for (const r of vendedoresData) {
       const raw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "";
@@ -390,10 +414,11 @@
       }
     }
 
-    // 🔽 NUEVO: Texto con contador
+    // 🔽 Obtener contadores
     const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
     const textoContador = ` 📅${contador.hoy} 📊${contador.mes}`;
 
+    // 🔽 Crear elemento de leyenda
     const div = document.createElement('div');
     div.className = 'legend-item';
 
@@ -402,26 +427,30 @@
     box.style.backgroundColor = vendorColorMap[nombreV];
     div.appendChild(box);
 
-    // 🔽 Añade el nombre + contador
-    div.appendChild(document.createTextNode(nombreOriginal + textoContador));
+    // Añadir nombre + contador
+    const textNode = document.createTextNode(` ${nombreOriginal}${textoContador}`);
+    div.appendChild(textNode);
 
     legend.appendChild(div);
   });
 
-  // Añadir prospectos (sin cambios)
+  // 🔽 Añadir entrada de "Prospectos (DENUE)"
   const p = document.createElement('div');
   p.className = 'legend-item';
+
   const star = document.createElement('div');
   star.className = 'legend-star';
-  star.innerHTML = `<svg ...>...</svg>`;
+  star.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9"
+        fill="#FFD700" stroke="#E6B800" stroke-width="0.7"/>
+    </svg>
+  `;
   p.appendChild(star);
-  p.appendChild(document.createTextNode("Prospectos (DENUE)"));
+
+  p.appendChild(document.createTextNode(" Prospectos (DENUE)"));
   legend.appendChild(p);
 }
-    
-    
-    
-    
 
   /************************ EVENTOS ************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
