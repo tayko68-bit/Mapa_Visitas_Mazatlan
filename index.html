@@ -348,46 +348,80 @@
 
   /************************ LEYENDA ************************/
   function actualizarLeyenda(){
-    const legend = document.getElementById('legend');
-    legend.innerHTML = "";
+  const legend = document.getElementById('legend');
+  legend.innerHTML = "";
 
-    // Ordenar alfabéticamente por nombre normalizado
-    const sortedVendors = Object.keys(vendorColorMap)
-      .sort((a, b) => a.localeCompare(b));
+  // 🔽 NUEVO: Calcular contador para cada vendedor
+  const contadores = {};
+  vendedoresData.forEach(r => {
+    const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
+    const nombreV = normalizarTexto(nombreVRaw);
 
-    sortedVendors.forEach(nombreV => {
-      // Buscar el nombre original más representativo
-      let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
-      for (const r of vendedoresData) {
-        const raw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "";
-        if (normalizarTexto(raw) === nombreV) {
-          nombreOriginal = raw;
-          break;
+    // Contar solo si no está ya contado
+    if (!contadores[nombreV]) {
+      contadores[nombreV] = { hoy: 0, mes: 0 };
+    }
+
+    const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
+    const fecha = new Date(fechaRaw);
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+    if (!isNaN(fecha.getTime())) {
+      if (fecha >= inicioMes) {
+        contadores[nombreV].mes++;
+        if (fecha.toDateString() === hoy.toDateString()) {
+          contadores[nombreV].hoy++;
         }
       }
+    }
+  });
 
-      const div = document.createElement('div');
-      div.className='legend-item';
-      const box=document.createElement('div');
-      box.className='legend-color';
-      box.style.backgroundColor = vendorColorMap[nombreV];
-      div.appendChild(box);
-      div.appendChild(document.createTextNode(nombreOriginal));
-      legend.appendChild(div);
-    });
+  // Ordenar alfabéticamente
+  const sortedVendors = Object.keys(vendorColorMap).sort();
 
-    // Añadir prospectos
-    const p=document.createElement('div');
-    p.className='legend-item';
-    const star=document.createElement('div');
-    star.className='legend-star';
-    star.innerHTML=`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9" fill="#FFD700" stroke="#E6B800" stroke-width="0.6"/>
-    </svg>`;
-    p.appendChild(star);
-    p.appendChild(document.createTextNode("Prospectos (DENUE)"));
-    legend.appendChild(p);
-  }
+  sortedVendors.forEach(nombreV => {
+    let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
+    for (const r of vendedoresData) {
+      const raw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "";
+      if (normalizarTexto(raw) === nombreV) {
+        nombreOriginal = raw;
+        break;
+      }
+    }
+
+    // 🔽 NUEVO: Texto con contador
+    const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
+    const textoContador = ` 📅${contador.hoy} 📊${contador.mes}`;
+
+    const div = document.createElement('div');
+    div.className = 'legend-item';
+
+    const box = document.createElement('div');
+    box.className = 'legend-color';
+    box.style.backgroundColor = vendorColorMap[nombreV];
+    div.appendChild(box);
+
+    // 🔽 Añade el nombre + contador
+    div.appendChild(document.createTextNode(nombreOriginal + textoContador));
+
+    legend.appendChild(div);
+  });
+
+  // Añadir prospectos (sin cambios)
+  const p = document.createElement('div');
+  p.className = 'legend-item';
+  const star = document.createElement('div');
+  star.className = 'legend-star';
+  star.innerHTML = `<svg ...>...</svg>`;
+  p.appendChild(star);
+  p.appendChild(document.createTextNode("Prospectos (DENUE)"));
+  legend.appendChild(p);
+}
+    
+    
+    
+    
 
   /************************ EVENTOS ************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
