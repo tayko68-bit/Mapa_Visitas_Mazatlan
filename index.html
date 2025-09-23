@@ -478,39 +478,95 @@ let pollingInterval = null;
 }
 
 
-/************************ AUTO-UPDATE ************************/
+/************************ AUTO-UPDATE (ROBUSTO) ************************/
 function verificarActualizaciones() {
-  const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + new Date().getTime();
+  // 🔽 Limpiar intervalo anterior si existe
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+  }
 
-  fetch(urlConCacheBuster)
-    .then(response => {
-      if (!response.ok) throw new Error("Error al descargar CSV");
-      return response.text();
-    })
-    .then(csvText => {
-      const lineas = csvText.split('\n').filter(line => line.trim() !== '');
-      if (lineas.length === 0) return;
+  pollingInterval = setInterval(() => {
+    const timestamp = new Date().getTime();
+    const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + timestamp;
 
-      const nuevoHash = lineas.length + "|" + lineas[0].substring(0, 50);
+    // 🔽 Debug: verificar que el polling funcione
+    console.log("🔍 Verificando cambios en vendedores...", new Date().toLocaleTimeString());
 
-      if (lastVendorHash && lastVendorHash !== nuevoHash) {
-        const status = document.getElementById('status');
-        status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
-        setTimeout(() => { status.textContent = ""; }, 3000);
-
-        console.log("📊 Cambio detectado en vendedores. Recargando...");
-        cargarVendedores();
+    fetch(urlConCacheBuster, {
+      cache: 'no-store',           // 🔽 Evita caché del navegador
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
-
-      lastVendorHash = nuevoHash;
     })
-    .catch(err => {
-      console.warn("No se pudo verificar actualización:", err);
-    });
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.text();
+      })
+      .then(csvText => {
+        // 🔽 Filtrar líneas vacías y encabezados inválidos
+        const lineas = csvText.split('\n').map(l => l.trim()).filter(line => line !== '' && line.startsWith('"') || /^[A-Za-z0-9]/.test(line));
+        if (lineas.length === 0) return;
 
-  pollingInterval = setTimeout(verificarActualizaciones, 30000);
+        // 🔽 Hash robusto: primera + última fila + total de filas
+        const primeraFila = lineas[0].substring(0, 50);
+        const ultimaFila = lineas[lineas.length - 1].substring(0, 50);
+        const nuevoHash = lineas.length + "|" + primeraFila + "|" + ultimaFila;
+
+        // 🔽 Si hay cambio, recargar
+        if (lastVendorHash && lastVendorHash !== nuevoHash) {
+          console.log("📊 Cambio detectado en CSV:", {
+            old: lastVendorHash,
+            new: nuevoHash
+          });
+
+          const status = document.getElementById('status');
+          status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+
+          // 🔽 Notificación visual (opcional)
+          mostrarNotificacion("🔄 Vendedores actualizados automáticamente");
+
+          cargarVendedores(); // 🔴 Recarga completa
+        }
+
+        // 🔽 Guardar hash para próxima verificación
+        lastVendorHash = nuevoHash;
+      })
+      .catch(err => {
+        console.warn("⚠️ Fallo al verificar actualización (se reintentará en 30s):", err.message);
+        // 🔽 NO romper el polling: seguir intentando
+      });
+  }, 30000); // 🔽 Verificar cada 30 segundos
 }
 
+// 🔽 Función de notificación visual (opcional)
+function mostrarNotificacion(mensaje) {
+  const toast = document.createElement('div');
+  toast.textContent = mensaje;
+  toast.style.position = 'fixed';
+  toast.style.bottom = '20px';
+  toast.style.right = '20px';
+  toast.style.background = '#28a745';
+  toast.style.color = 'white';
+  toast.style.padding = '10px 15px';
+  toast.style.borderRadius = '6px';
+  toast.style.zIndex = '2000';
+  toast.style.fontSize = '14px';
+  toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// 🔽 Reactivar polling si la pestaña se reactiva (evita que el navegador lo "duerma")
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && pollingInterval) {
+    console.log("🔄 Pestaña reactivada. Reiniciando polling...");
+    clearInterval(pollingInterval);
+    verificarActualizaciones();
+  }
+});
 
   /************************ EVENTOS ************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
