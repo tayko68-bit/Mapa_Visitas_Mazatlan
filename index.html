@@ -129,7 +129,12 @@
     "wendy": "violet",
     "alfredo": "green"
   };
+    
+/************************ AUTO-UPDATE ************************/
+let lastVendorHash = null;
+let pollingInterval = null;
 
+    
   /************************ UTILIDADES ************************/
   function normalizarTexto(txt) {
     if (!txt && txt !== 0) return "";
@@ -261,18 +266,30 @@
   }
 
   function cargarVendedores() {
-    Papa.parse(URL_VENDEDORES_CSV, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete(results){
-        vendedoresData = results.data;
-        renderVendedores(vendedoresData);
-        console.log("Vendedores cargados:", vendedoresData.length);
-      },
-      error(err){ console.error(err); document.getElementById('status').textContent="Error cargando vendedores"; }
-    });
-  }
+  const status = document.getElementById('status');
+  status.textContent = "Cargando vendedores...";
+
+  // 🔽 Evitar caché del CSV
+  const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + new Date().getTime();
+
+  Papa.parse(urlConCacheBuster, {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    complete(results){
+      vendedoresData = results.data;
+      renderVendedores(vendedoresData);
+      actualizarLeyenda();
+      status.textContent = `Vendedores cargados: ${vendedoresData.length}`;
+      setTimeout(() => { status.textContent = ""; }, 3000);
+      console.log("Vendedores cargados:", vendedoresData.length);
+    },
+    error(err){ 
+      console.error(err); 
+      status.textContent = "Error cargando vendedores";
+    }
+  });
+}
 
   /************************ CARGA DENUE ************************/
   function cargarDENUE(){
@@ -461,7 +478,38 @@
 }
 
 
+/************************ AUTO-UPDATE ************************/
+function verificarActualizaciones() {
+  const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + new Date().getTime();
 
+  fetch(urlConCacheBuster)
+    .then(response => {
+      if (!response.ok) throw new Error("Error al descargar CSV");
+      return response.text();
+    })
+    .then(csvText => {
+      const lineas = csvText.split('\n').filter(line => line.trim() !== '');
+      if (lineas.length === 0) return;
+
+      const nuevoHash = lineas.length + "|" + lineas[0].substring(0, 50);
+
+      if (lastVendorHash && lastVendorHash !== nuevoHash) {
+        const status = document.getElementById('status');
+        status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
+        setTimeout(() => { status.textContent = ""; }, 3000);
+
+        console.log("📊 Cambio detectado en vendedores. Recargando...");
+        cargarVendedores();
+      }
+
+      lastVendorHash = nuevoHash;
+    })
+    .catch(err => {
+      console.warn("No se pudo verificar actualización:", err);
+    });
+
+  pollingInterval = setTimeout(verificarActualizaciones, 30000);
+}
 
 
   /************************ EVENTOS ************************/
@@ -486,8 +534,11 @@
   });
 
   /************************ INICIO ************************/
-  cargarVendedores();
-  cargarDENUE();
+cargarVendedores();
+cargarDENUE();
+
+// 🔽 Iniciar verificación automática cada 30 segundos
+verificarActualizaciones();
   </script>
 </body>
 </html>
