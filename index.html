@@ -265,30 +265,47 @@ let pollingInterval = null;
     actualizarLeyenda();
   }
 
-  function cargarVendedores() {
+function cargarVendedores() {
   const status = document.getElementById('status');
   status.textContent = "Cargando vendedores...";
 
-  // 🔽 Evitar caché del CSV
-  const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + new Date().getTime();
+  // Cache busting más agresivo
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(7);
+  const urlConCacheBuster = URL_VENDEDORES_CSV + "&t=" + timestamp + "&r=" + random;
 
-  Papa.parse(urlConCacheBuster, {
-    download: true,
-    header: true,
-    skipEmptyLines: true,
-    complete(results){
-      vendedoresData = results.data;
-      renderVendedores(vendedoresData);
-      actualizarLeyenda();
-      status.textContent = `Vendedores cargados: ${vendedoresData.length}`;
-      setTimeout(() => { status.textContent = ""; }, 3000);
-      console.log("Vendedores cargados:", vendedoresData.length);
-    },
-    error(err){ 
-      console.error(err); 
-      status.textContent = "Error cargando vendedores";
+  // Forzar no-cache con XMLHttpRequest personalizado
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', urlConCacheBuster, true);
+  
+  // Headers anti-cache
+  xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  xhr.setRequestHeader('Pragma', 'no-cache');
+  xhr.setRequestHeader('Expires', '0');
+  
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      Papa.parse(xhr.responseText, {
+        header: true,
+        skipEmptyLines: true,
+        complete(results) {
+          vendedoresData = results.data;
+          renderVendedores(vendedoresData);
+          actualizarLeyenda();
+          status.textContent = `Vendedores cargados: ${vendedoresData.length}`;
+          setTimeout(() => { status.textContent = ""; }, 3000);
+          console.log("✅ Vendedores cargados:", vendedoresData.length, new Date().toLocaleTimeString());
+        }
+      });
     }
-  });
+  };
+  
+  xhr.onerror = function() {
+    console.error("Error cargando vendedores");
+    status.textContent = "Error cargando vendedores";
+  };
+  
+  xhr.send();
 }
 
   /************************ CARGA DENUE ************************/
@@ -484,91 +501,82 @@ function verificarActualizaciones() {
     clearInterval(pollingInterval);
   }
 
+  // Reducir intervalo temporalmente para testing (puedes volver a 30000)
+  const INTERVALO = 15000; // 15 segundos para pruebas
+
   pollingInterval = setInterval(() => {
-    const timestamp = new Date().getTime();
-    const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + timestamp;
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(7);
+    const urlConCacheBuster = URL_VENDEDORES_CSV + "&t=" + timestamp + "&r=" + random;
 
-    console.log("🔍 Verificando cambios en vendedores...", new Date().toLocaleTimeString());
+    console.log("🔍 Verificando cambios...", new Date().toLocaleTimeString());
 
-    Papa.parse(urlConCacheBuster, {
-      download: true,
-      header: false,
-      skipEmptyLines: true,
-      fastMode: true,
-      complete: function(results) {
-        if (!results.data || results.data.length === 0) return;
-
-        const lineas = results.data.map(row => Object.values(row).join(",")).filter(line => line.trim() !== "");
-
-        if (lineas.length === 0) return;
-
-        // 🔽 Hash robusto: basado en contenido total (detecta ediciones, sin btoa)
-        const contenidoTotal = lineas.join("|||");
-        const nuevoHash = lineas.length + "|" + crearHash(contenidoTotal);
-
-        if (lastVendorHash && lastVendorHash !== nuevoHash) {
-          console.log("📊 Cambio detectado en CSV:", {
-            old: lastVendorHash,
-            new: nuevoHash
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', urlConCacheBuster, true);
+    xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    xhr.setRequestHeader('Pragma', 'no-cache');
+    
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        const csvText = xhr.responseText;
+        
+        // Hash más robusto basado en contenido completo
+        const nuevoHash = generarHashRobusto(csvText);
+        
+        if (lastVendorHash === null) {
+          // Primera vez
+          lastVendorHash = nuevoHash;
+          console.log("🏁 Hash inicial establecido:", lastVendorHash);
+        } else if (lastVendorHash !== nuevoHash) {
+          console.log("📊 ¡CAMBIO DETECTADO!", {
+            anterior: lastVendorHash,
+            nuevo: nuevoHash,
+            hora: new Date().toLocaleTimeString()
           });
-
-          const status = document.getElementById('status');
-          status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
-          setTimeout(() => { status.textContent = ""; }, 3000);
-
-          mostrarNotificacion("🔄 Vendedores actualizados automáticamente");
-
-          cargarVendedores();
+          
+          lastVendorHash = nuevoHash;
+          
+          // Recargar datos inmediatamente
+          Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            complete(results) {
+              vendedoresData = results.data;
+              renderVendedores(vendedoresData);
+              actualizarLeyenda();
+              
+              const status = document.getElementById('status');
+              status.textContent = "🔄 Vendedores actualizados automáticamente";
+              mostrarNotificacion("✅ Mapa actualizado con nuevos datos");
+              setTimeout(() => { status.textContent = ""; }, 3000);
+            }
+          });
+        } else {
+          console.log("✓ Sin cambios", new Date().toLocaleTimeString());
         }
-
-        lastVendorHash = nuevoHash;
-      },
-      error: function(err) {
-        console.warn("⚠️ Fallo al verificar actualización (se reintentará en 30s):", err.message);
       }
-    });
-  }, 30000);
+    };
+    
+    xhr.onerror = function() {
+      console.warn("⚠️ Error en verificación (se reintentará)");
+    };
+    
+    xhr.send();
+  }, INTERVALO);
 }
 
-// 🔽 Función para crear hash seguro (reemplaza btoa)
-function crearHash(texto) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(texto);
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    hash = ((hash << 5) - hash) + data[i];
-    hash = hash & hash; // Convertir a 32-bit integer
+// Hash más robusto usando DJB2
+function generarHashRobusto(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) + hash) + char; // hash * 33 + char
   }
-  return hash.toString(36); // Base36 (corto y legible)
+  
+  // Incluir longitud y checksum para mayor precisión
+  const checksum = str.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return `${str.length}_${hash}_${checksum}`;
 }
-
-// 🔽 Función de notificación visual (opcional)
-function mostrarNotificacion(mensaje) {
-  const toast = document.createElement('div');
-  toast.textContent = mensaje;
-  toast.style.position = 'fixed';
-  toast.style.bottom = '20px';
-  toast.style.right = '20px';
-  toast.style.background = '#28a745';
-  toast.style.color = 'white';
-  toast.style.padding = '10px 15px';
-  toast.style.borderRadius = '6px';
-  toast.style.zIndex = '2000';
-  toast.style.fontSize = '14px';
-  toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
-}
-
-// 🔽 Reactivar polling si la pestaña se reactiva (evita que el navegador lo "duerma")
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && pollingInterval) {
-    console.log("🔄 Pestaña reactivada. Reiniciando polling...");
-    clearInterval(pollingInterval);
-    verificarActualizaciones();
-  }
-});
-
   /************************ EVENTOS ************************/
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
   document.getElementById('limpiarBtn').addEventListener('click', limpiarProspectos);
