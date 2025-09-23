@@ -61,109 +61,29 @@
       font-size: 14px;
     }
 
-    /* Animación de pulso sutil para marcadores del día */
-    @keyframes pulseMarker {
-      0% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(0.85);
-      }
-      100% {
-        transform: scale(1);
-      }
-    }
-
-    .marker-today {
-      animation: pulseMarker 1.5s ease-in-out infinite;
-      transform-origin: 12px 41px; /* Punto de anclaje del marcador estándar */
-    }
-
-    /* Leyenda mejorada */
+    /* Leyenda inferior derecha */
     .legend {
       position: absolute;
       bottom: 10px;
       right: 10px;
-      background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
-      padding: 12px 15px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: rgba(255,255,255,0.95);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: sans-serif;
       font-size: 13px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
       z-index: 1000;
       max-height: 40vh;
       overflow-y: auto;
-      min-width: 180px;
-      border: 1px solid rgba(0,0,0,0.08);
+      min-width:150px;
     }
-
-    .legend-title {
-      font-weight: 600;
-      font-size: 14px;
-      margin-bottom: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #e0e0e0;
-      color: #2c3e50;
-    }
-
-    .legend-item { 
-      display: flex; 
-      align-items: center; 
-      margin-bottom: 8px;
-      padding: 4px 6px;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-    }
-
-    .legend-item:hover {
-      background-color: rgba(0,0,0,0.04);
-    }
-
+    .legend-item { display:flex; align-items:center; margin-bottom:6px; }
     .legend-color {
-      width: 18px; 
-      height: 18px; 
-      margin-right: 10px; 
-      border-radius: 50%; 
-      border: 2px solid white;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      flex: 0 0 18px;
+      width:16px; height:16px; margin-right:8px; border-radius:50%; border:1px solid #00000040;
+      flex:0 0 16px;
     }
-
     .legend-star {
-      width: 22px; 
-      height: 22px; 
-      margin-right: 10px; 
-      display: inline-block; 
-      flex: 0 0 22px;
-    }
-
-    .legend-counters {
-      margin-left: auto;
-      display: flex;
-      gap: 8px;
-      font-size: 11px;
-    }
-
-    .counter-today {
-      background: #4CAF50;
-      color: white;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-weight: 500;
-    }
-
-    .counter-month {
-      background: #2196F3;
-      color: white;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-weight: 500;
-    }
-
-    .legend-separator {
-      height: 1px;
-      background: #e0e0e0;
-      margin: 10px 0;
+      width:18px; height:18px; margin-right:8px; display:inline-block; flex:0 0 18px;
     }
   </style>
 </head>
@@ -259,73 +179,14 @@
     });
   }
 
-  // Función auxiliar para obtener color hex
-  function getColorHex(colorName) {
-    const colors = {
-      'red': '#FF4444',
-      'orange': '#FF8C00',
-      'yellow': '#FFD700',
-      'blue': '#2196F3',
-      'grey': '#757575',
-      'black': '#333333',
-      'green': '#4CAF50',
-      'violet': '#9C27B0',
-      'pink': '#E91E63',
-      'cadetblue': '#5F9EA0'
-    };
-    return colors[colorName] || '#666666';
-  }
-
-  // Crear icono con fallback
-  function crearIconoColor(colorName, esHoy = false) {
-    console.log(`🔍 Creando icono para color: ${colorName}`);
-    
-    // URLs alternativas para marcadores
-    const urls = [
-      `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
-      `https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`
-    ];
-
-    const icon = L.icon({
-      iconUrl: urls[0],
+  function crearIconoColor(colorName) {
+    return L.icon({
+      iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
       shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
       iconSize: [25, 41],
       iconAnchor: [12, 41],
       popupAnchor: [1, -34],
       shadowSize: [41, 41]
-    });
-
-    // Verificar si la imagen se carga, si no, crear un icono SVG personalizado
-    const img = new Image();
-    img.onerror = function() {
-      console.warn(`⚠️ No se pudo cargar marcador ${colorName}, usando fallback`);
-      return crearIconoSVG(colorName);
-    };
-    img.src = urls[0];
-
-    return icon;
-  }
-
-  // Crear icono SVG como fallback
-  function crearIconoSVG(colorName) {
-    const color = getColorHex(colorName);
-    const svg = `
-      <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12.5 0C5.596 0 0 5.596 0 12.5c0 3.5 1.5 6.5 3 9L12.5 41l9.5-19.5c1.5-2.5 3-5.5 3-9C25 5.596 19.404 0 12.5 0z" 
-              fill="${color}" 
-              stroke="white" 
-              stroke-width="1"/>
-        <circle cx="12.5" cy="12.5" r="6" fill="white"/>
-        <circle cx="12.5" cy="12.5" r="3" fill="${color}"/>
-      </svg>
-    `;
-    
-    return L.divIcon({
-      html: svg,
-      className: '',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34]
     });
   }
 
@@ -354,31 +215,25 @@
     layerVendedores.clearLayers();
     const vendorSet = new Set();
     const vendorList = [];
-    
-    // Fecha de hoy para comparación
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
 
     // Recolectar todos los vendedores únicos
     rows.forEach(r => {
       const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
       const nombreV = normalizarTexto(nombreVRaw);
       vendorSet.add(nombreV);
-      console.log(`📋 Vendedor encontrado: "${nombreVRaw}" -> normalizado: "${nombreV}"`);
     });
 
     // Ordenar alfabéticamente
     vendorList.push(...Array.from(vendorSet).sort());
 
-    // Asignar colores - ASEGURAR QUE EL PRIMER VENDEDOR TENGA ROJO
+    // Asignar colores
     const palette = ["red","orange","yellow","blue","grey","black","green","violet","pink","cadetblue"];
     let colorIndex = 0;
     vendorColorMap = {};
 
-    vendorList.forEach((nombreV, index) => {
+    vendorList.forEach(nombreV => {
       if (FIXED_VENDOR_COLORS[nombreV]) {
         vendorColorMap[nombreV] = FIXED_VENDOR_COLORS[nombreV];
-        console.log(`🎨 Color fijo asignado: ${nombreV} -> ${FIXED_VENDOR_COLORS[nombreV]}`);
       } else {
         let color = palette[colorIndex % palette.length];
         while (Object.values(vendorColorMap).includes(color) && colorIndex < palette.length * 2) {
@@ -386,12 +241,9 @@
           color = palette[colorIndex % palette.length];
         }
         vendorColorMap[nombreV] = color;
-        console.log(`🎨 Color asignado: ${nombreV} -> ${color} (índice: ${colorIndex})`);
         colorIndex++;
       }
     });
-
-    console.log("🗺️ Mapa de colores final:", vendorColorMap);
 
     // Renderizar marcadores
     rows.forEach(r => {
@@ -408,55 +260,23 @@
       }
       if(isNaN(lat)||isNaN(lon)) return;
 
-      // Verificar si es de hoy
-      const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
-      let esDeHoy = false;
-      
-      const match = fechaRaw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
-      if (match) {
-        const [, dia, mes, anio, hora, min, seg] = match;
-        const fecha = new Date(anio, mes - 1, dia, 0, 0, 0);
-        esDeHoy = fecha.getTime() === hoy.getTime();
-      }
-
       const colorName = vendorColorMap[nombreV];
-      console.log(`📍 Creando marcador: ${nombreVRaw} -> ${colorName} en [${lat}, ${lon}]`);
-      
-      const marker = L.marker([lat, lon], { 
-        icon: crearIconoColor(colorName, esDeHoy),
-        zIndexOffset: esDeHoy ? 1000 : 0 // Los de hoy aparecen encima
-      });
 
-      // Aplicar animación solo si es de hoy
-      if (esDeHoy) {
-        marker.on('add', function() {
-          // Buscar el elemento del marcador en el DOM y aplicar la clase
-          setTimeout(() => {
-            const markerElement = marker.getElement();
-            if (markerElement) {
-              markerElement.classList.add('marker-today');
-            }
-          }, 100);
-        });
-      }
-      
+      const marker = L.marker([lat, lon], { icon: crearIconoColor(colorName) });
       const cliente = valorFila(r, ["NOMBRE CLIENTE","NOMBRE_CLIENTE","nombre cliente","nom_estab"]) || "";
       const fecha = valorFila(r, ["FECHA","fecha"]) || "";
       const giro = valorFila(r, ["GIRO","giro"]) || "";
       const motivo = valorFila(r, ["MOTIVO","motivo"]) || "";
       const obs = valorFila(r, ["OBSERVACIONES","observaciones"]) || "";
 
-      const popupContent = `
-        ${esDeHoy ? '<div style="background:#4CAF50;color:white;padding:4px 8px;margin:-10px -10px 8px -10px;font-weight:bold;">✨ VISITA DE HOY</div>' : ''}
-        <b>Vendedor:</b> ${nombreVRaw}<br>
+      marker.bindPopup(
+        `<b>Vendedor:</b> ${nombreVRaw}<br>
         <b>Fecha:</b> ${fecha}<br>
         <b>Cliente:</b> ${cliente}<br>
         <b>Giro:</b> ${giro}<br>
         <b>Motivo:</b> ${motivo}<br>
-        <b>Obs:</b> ${obs}
-      `;
-
-      marker.bindPopup(popupContent);
+        <b>Obs:</b> ${obs}`
+      );
       marker.addTo(layerVendedores);
     });
 
@@ -485,8 +305,6 @@
       skipEmptyLines: true,
       complete(results) {
         vendedoresData = results.data;
-        console.log("📊 Datos recibidos:", results.data.length, "registros");
-        console.log("📋 Primer registro:", results.data[0]);
         renderVendedores(vendedoresData);
         actualizarLeyenda();
         status.textContent = `Vendedores cargados: ${vendedoresData.length}`;
@@ -572,19 +390,13 @@
     actualizarLeyenda();
   }
 
-  /************************ LEYENDA MEJORADA ************************/
+  /************************ LEYENDA ************************/
   function actualizarLeyenda() {
     const legend = document.getElementById('legend');
     legend.innerHTML = "";
 
-    // Título de la leyenda
-    const title = document.createElement('div');
-    title.className = 'legend-title';
-    title.textContent = '📍 Vendedores';
-    legend.appendChild(title);
-
     if (!vendedoresData || vendedoresData.length === 0) {
-      legend.innerHTML += "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
+      legend.innerHTML = "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
       return;
     }
 
@@ -609,7 +421,9 @@
         fecha = new Date(fechaRaw.trim());
       }
 
-      if (isNaN(fecha.getTime())) return;
+      if (isNaN(fecha.getTime())) {
+        return;
+      }
 
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
@@ -641,47 +455,22 @@
       }
 
       const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
-      
+      const textoContador = ` 📅${contador.hoy} 📊${contador.mes}`;
+
       const div = document.createElement('div');
       div.className = 'legend-item';
 
       const box = document.createElement('div');
       box.className = 'legend-color';
-      box.style.backgroundColor = getColorHex(vendorColorMap[nombreV]);
+      box.style.backgroundColor = vendorColorMap[nombreV];
       div.appendChild(box);
 
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = nombreOriginal;
-      nameSpan.style.flex = '1';
-      div.appendChild(nameSpan);
+      const textNode = document.createTextNode(` ${nombreOriginal}${textoContador}`);
+      div.appendChild(textNode);
 
-      const countersDiv = document.createElement('div');
-      countersDiv.className = 'legend-counters';
-      
-      if (contador.hoy > 0) {
-        const todaySpan = document.createElement('span');
-        todaySpan.className = 'counter-today';
-        todaySpan.textContent = contador.hoy;
-        todaySpan.title = 'Visitas hoy';
-        countersDiv.appendChild(todaySpan);
-      }
-      
-      const monthSpan = document.createElement('span');
-      monthSpan.className = 'counter-month';
-      monthSpan.textContent = contador.mes;
-      monthSpan.title = 'Visitas este mes';
-      countersDiv.appendChild(monthSpan);
-      
-      div.appendChild(countersDiv);
       legend.appendChild(div);
     });
 
-    // Separador
-    const separator = document.createElement('div');
-    separator.className = 'legend-separator';
-    legend.appendChild(separator);
-
-    // Prospectos
     const p = document.createElement('div');
     p.className = 'legend-item';
 
@@ -695,10 +484,7 @@
     `;
     p.appendChild(star);
 
-    const prospectText = document.createElement('span');
-    prospectText.textContent = " Prospectos (DENUE)";
-    p.appendChild(prospectText);
-    
+    p.appendChild(document.createTextNode(" Prospectos (DENUE)"));
     legend.appendChild(p);
   }
 
@@ -832,8 +618,7 @@
       console.log('Estado actual:', {
         vendedores: vendedoresData.length,
         lastHash: lastVendorHash,
-        hora: new Date().toLocaleTimeString(),
-        colores: vendorColorMap
+        hora: new Date().toLocaleTimeString()
       });
       
       // Forzar recarga con nuevo hash
