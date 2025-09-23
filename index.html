@@ -255,7 +255,8 @@
     "Refacciones automotrices": [468211, 468212],
     "Alumineros / carp. aluminio": [332322],
     "Instaladores de rótulos": [323111],
-    "Suministros industriales": [332991, 332710]
+    "Suministros industriales": [332991, 332710],
+    "Carpinterías/madera": [337110, 337120, 337910, 321910, 321920]
   };
 
   const FIXED_VENDOR_COLORS = {
@@ -269,7 +270,6 @@
   let vistaActual = 'mes'; // 'mes' o 'hoy'
   let vendedorSeleccionado = null; // Para filtrar por vendedor
 
-  /************************ DEBUG MODE ************************/
   window.addEventListener('load', () => {
     console.log("🚀 Aplicación iniciada", new Date().toLocaleTimeString());
     
@@ -878,28 +878,6 @@
       panel.classList.add('collapsed');
       arrow.textContent = "▶";
     }
-  });
-
-  /************************ BOTÓN DEBUG ************************/
-  // Agregar botón de debug después de que se cargue el DOM
-  window.addEventListener('DOMContentLoaded', () => {
-    const debugBtn = document.createElement('button');
-    debugBtn.textContent = '🐛 Debug Cache';
-    debugBtn.style.cssText = 'width: 100%; margin-top: 6px; background: #ff5722; color: white; padding: 6px; font-size: 14px;';
-    debugBtn.onclick = () => {
-      console.log('Estado actual:', {
-        vendedores: vendedoresData.length,
-        lastHash: lastVendorHash,
-        vista: vistaActual,
-        vendedorSeleccionado: vendedorSeleccionado,
-        hora: new Date().toLocaleTimeString()
-      });
-      
-      // Forzar recarga con nuevo hash
-      lastVendorHash = null;
-      cargarVendedores();
-    };
-    document.querySelector('.panel-content').appendChild(debugBtn);
   });
 
   /************************ INICIO ************************/
