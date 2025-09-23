@@ -108,7 +108,7 @@
 
   <script>
   /************************ CONFIG ************************/
-  const URL_VENDEDORES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTmRi-dPt7wPBvbcg1UMLZMU8fV_dAcR9BlVIS2leud01HWVnvKg5aq6RP0YsC1r_3yOFzHQsMv-g_F/pub?output=csv";
+  const URL_VENDEDORES_CSV = "https://script.google.com/macros/s/AKfycbxxIOHwJwctTDlxwvAX3q6zYmc15q4EZ8gz0CgdLaDvuQs9XbpfAJ4FYjj2M0ZXOjfz/exec";
   const URL_DENUE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSK87ymKaIGki4st8Fu8NIruKQEuKFR_rrfueefbJ3QFLVAjIGt5E6tBy2v1nhGBh9npPKZp6cRQDc/pub?output=csv";
 
   const GIROS = {
@@ -478,9 +478,8 @@ let pollingInterval = null;
 }
 
 
-/************************ AUTO-UPDATE (ROBUSTO) ************************/
+/************************ AUTO-UPDATE (ROBUSTO con Papa.parse) ************************/
 function verificarActualizaciones() {
-  // 🔽 Limpiar intervalo anterior si existe
   if (pollingInterval) {
     clearInterval(pollingInterval);
   }
@@ -488,57 +487,71 @@ function verificarActualizaciones() {
   pollingInterval = setInterval(() => {
     const timestamp = new Date().getTime();
     const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + timestamp;
-
-    // 🔽 Debug: verificar que el polling funcione
+const timestamp = new Date().getTime();
+const urlConCacheBuster = `${URL_VENDEDORES_CSV}?t=${timestamp}`;
     console.log("🔍 Verificando cambios en vendedores...", new Date().toLocaleTimeString());
 
-    fetch(urlConCacheBuster, {
-      cache: 'no-store',           // 🔽 Evita caché del navegador
+ Papa.parse(urlConCacheBuster, {
+  download: true,
+  header: false,
+  skipEmptyLines: true,
+  fastMode: true,
+  // 🔽 Añade esto: transformRequest
+  transformRequest: (url) => {
+    return {
+      url: url,
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0'
       }
-    })
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.text();
-      })
-      .then(csvText => {
-        // 🔽 Filtrar líneas vacías y encabezados inválidos
-        const lineas = csvText.split('\n').map(l => l.trim()).filter(line => line !== '' && line.startsWith('"') || /^[A-Za-z0-9]/.test(line));
-        if (lineas.length === 0) return;
+    };
+  },
+  complete: function(results) {
+    if (!results.data || results.data.length === 0) return;
 
-        // 🔽 Hash robusto: primera + última fila + total de filas
-        const primeraFila = lineas[0].substring(0, 50);
-        const ultimaFila = lineas[lineas.length - 1].substring(0, 50);
-        const nuevoHash = lineas.length + "|" + primeraFila + "|" + ultimaFila;
+    const lineas = results.data.map(row => Object.values(row).join(",")).filter(line => line.trim() !== "");
 
-        // 🔽 Si hay cambio, recargar
-        if (lastVendorHash && lastVendorHash !== nuevoHash) {
-          console.log("📊 Cambio detectado en CSV:", {
-            old: lastVendorHash,
-            new: nuevoHash
-          });
+    if (lineas.length === 0) return;
 
-          const status = document.getElementById('status');
-          status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
-          setTimeout(() => { status.textContent = ""; }, 3000);
+    // 🔽 Hash robusto: basado en contenido total (detecta ediciones, sin btoa)
+    const contenidoTotal = lineas.join("|||");
+    const nuevoHash = lineas.length + "|" + crearHash(contenidoTotal);
 
-          // 🔽 Notificación visual (opcional)
-          mostrarNotificacion("🔄 Vendedores actualizados automáticamente");
-
-          cargarVendedores(); // 🔴 Recarga completa
-        }
-
-        // 🔽 Guardar hash para próxima verificación
-        lastVendorHash = nuevoHash;
-      })
-      .catch(err => {
-        console.warn("⚠️ Fallo al verificar actualización (se reintentará en 30s):", err.message);
-        // 🔽 NO romper el polling: seguir intentando
+    if (lastVendorHash && lastVendorHash !== nuevoHash) {
+      console.log("📊 Cambio detectado en CSV:", {
+        old: lastVendorHash,
+        new: nuevoHash
       });
-  }, 30000); // 🔽 Verificar cada 30 segundos
+
+      const status = document.getElementById('status');
+      status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
+      setTimeout(() => { status.textContent = ""; }, 3000);
+
+      mostrarNotificacion("🔄 Vendedores actualizados automáticamente");
+
+      cargarVendedores();
+    }
+
+    lastVendorHash = nuevoHash;
+  },
+  error: function(err) {
+    console.warn("⚠️ Fallo al verificar actualización (se reintentará en 30s):", err.message);
+  }
+});
+  }, 30000);
+}
+
+// 🔽 Función para crear hash seguro (reemplaza btoa)
+function crearHash(texto) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(texto);
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) {
+    hash = ((hash << 5) - hash) + data[i];
+    hash = hash & hash; // Convertir a 32-bit integer
+  }
+  return hash.toString(36); // Base36 (corto y legible)
 }
 
 // 🔽 Función de notificación visual (opcional)
