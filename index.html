@@ -276,10 +276,18 @@
     return colors[colorName] || '#666666';
   }
 
+  // Crear icono con fallback
   function crearIconoColor(colorName, esHoy = false) {
-    // Usar siempre el mismo tipo de marcador
+    console.log(`🔍 Creando icono para color: ${colorName}`);
+    
+    // URLs alternativas para marcadores
+    const urls = [
+      `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
+      `https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`
+    ];
+
     const icon = L.icon({
-      iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
+      iconUrl: urls[0],
       shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
       iconSize: [25, 41],
       iconAnchor: [12, 41],
@@ -287,7 +295,38 @@
       shadowSize: [41, 41]
     });
 
+    // Verificar si la imagen se carga, si no, crear un icono SVG personalizado
+    const img = new Image();
+    img.onerror = function() {
+      console.warn(`⚠️ No se pudo cargar marcador ${colorName}, usando fallback`);
+      return crearIconoSVG(colorName);
+    };
+    img.src = urls[0];
+
     return icon;
+  }
+
+  // Crear icono SVG como fallback
+  function crearIconoSVG(colorName) {
+    const color = getColorHex(colorName);
+    const svg = `
+      <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12.5 0C5.596 0 0 5.596 0 12.5c0 3.5 1.5 6.5 3 9L12.5 41l9.5-19.5c1.5-2.5 3-5.5 3-9C25 5.596 19.404 0 12.5 0z" 
+              fill="${color}" 
+              stroke="white" 
+              stroke-width="1"/>
+        <circle cx="12.5" cy="12.5" r="6" fill="white"/>
+        <circle cx="12.5" cy="12.5" r="3" fill="${color}"/>
+      </svg>
+    `;
+    
+    return L.divIcon({
+      html: svg,
+      className: '',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34]
+    });
   }
 
   /************************ MAPA Y CAPAS ************************/
@@ -325,19 +364,21 @@
       const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
       const nombreV = normalizarTexto(nombreVRaw);
       vendorSet.add(nombreV);
+      console.log(`📋 Vendedor encontrado: "${nombreVRaw}" -> normalizado: "${nombreV}"`);
     });
 
     // Ordenar alfabéticamente
     vendorList.push(...Array.from(vendorSet).sort());
 
-    // Asignar colores
+    // Asignar colores - ASEGURAR QUE EL PRIMER VENDEDOR TENGA ROJO
     const palette = ["red","orange","yellow","blue","grey","black","green","violet","pink","cadetblue"];
     let colorIndex = 0;
     vendorColorMap = {};
 
-    vendorList.forEach(nombreV => {
+    vendorList.forEach((nombreV, index) => {
       if (FIXED_VENDOR_COLORS[nombreV]) {
         vendorColorMap[nombreV] = FIXED_VENDOR_COLORS[nombreV];
+        console.log(`🎨 Color fijo asignado: ${nombreV} -> ${FIXED_VENDOR_COLORS[nombreV]}`);
       } else {
         let color = palette[colorIndex % palette.length];
         while (Object.values(vendorColorMap).includes(color) && colorIndex < palette.length * 2) {
@@ -345,9 +386,12 @@
           color = palette[colorIndex % palette.length];
         }
         vendorColorMap[nombreV] = color;
+        console.log(`🎨 Color asignado: ${nombreV} -> ${color} (índice: ${colorIndex})`);
         colorIndex++;
       }
     });
+
+    console.log("🗺️ Mapa de colores final:", vendorColorMap);
 
     // Renderizar marcadores
     rows.forEach(r => {
@@ -376,6 +420,8 @@
       }
 
       const colorName = vendorColorMap[nombreV];
+      console.log(`📍 Creando marcador: ${nombreVRaw} -> ${colorName} en [${lat}, ${lon}]`);
+      
       const marker = L.marker([lat, lon], { 
         icon: crearIconoColor(colorName, esDeHoy),
         zIndexOffset: esDeHoy ? 1000 : 0 // Los de hoy aparecen encima
@@ -439,6 +485,8 @@
       skipEmptyLines: true,
       complete(results) {
         vendedoresData = results.data;
+        console.log("📊 Datos recibidos:", results.data.length, "registros");
+        console.log("📋 Primer registro:", results.data[0]);
         renderVendedores(vendedoresData);
         actualizarLeyenda();
         status.textContent = `Vendedores cargados: ${vendedoresData.length}`;
@@ -784,7 +832,8 @@
       console.log('Estado actual:', {
         vendedores: vendedoresData.length,
         lastHash: lastVendorHash,
-        hora: new Date().toLocaleTimeString()
+        hora: new Date().toLocaleTimeString(),
+        colores: vendorColorMap
       });
       
       // Forzar recarga con nuevo hash
