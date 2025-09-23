@@ -61,29 +61,113 @@
       font-size: 14px;
     }
 
-    /* Leyenda inferior derecha */
+    /* Animación de pulso para marcadores del día */
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(255, 67, 67, 0.7);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 0 10px rgba(255, 67, 67, 0);
+        transform: scale(1.05);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 67, 67, 0);
+        transform: scale(1);
+      }
+    }
+
+    .marker-today {
+      animation: pulse 2s infinite;
+      border-radius: 50%;
+      background: white;
+    }
+
+    /* Leyenda mejorada */
     .legend {
       position: absolute;
       bottom: 10px;
       right: 10px;
-      background: rgba(255,255,255,0.95);
-      padding: 10px;
-      border-radius: 6px;
-      font-family: sans-serif;
+      background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+      padding: 12px 15px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       z-index: 1000;
       max-height: 40vh;
       overflow-y: auto;
-      min-width:150px;
+      min-width: 180px;
+      border: 1px solid rgba(0,0,0,0.08);
     }
-    .legend-item { display:flex; align-items:center; margin-bottom:6px; }
+
+    .legend-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e0e0e0;
+      color: #2c3e50;
+    }
+
+    .legend-item { 
+      display: flex; 
+      align-items: center; 
+      margin-bottom: 8px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .legend-item:hover {
+      background-color: rgba(0,0,0,0.04);
+    }
+
     .legend-color {
-      width:16px; height:16px; margin-right:8px; border-radius:50%; border:1px solid #00000040;
-      flex:0 0 16px;
+      width: 18px; 
+      height: 18px; 
+      margin-right: 10px; 
+      border-radius: 50%; 
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      flex: 0 0 18px;
     }
+
     .legend-star {
-      width:18px; height:18px; margin-right:8px; display:inline-block; flex:0 0 18px;
+      width: 22px; 
+      height: 22px; 
+      margin-right: 10px; 
+      display: inline-block; 
+      flex: 0 0 22px;
+    }
+
+    .legend-counters {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+    }
+
+    .counter-today {
+      background: #4CAF50;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .counter-month {
+      background: #2196F3;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .legend-separator {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 10px 0;
     }
   </style>
 </head>
@@ -179,15 +263,62 @@
     });
   }
 
-  function crearIconoColor(colorName) {
-    return L.icon({
-      iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
+  // Función auxiliar para obtener color hex
+  function getColorHex(colorName) {
+    const colors = {
+      'red': '#FF4444',
+      'orange': '#FF8C00',
+      'yellow': '#FFD700',
+      'blue': '#2196F3',
+      'grey': '#757575',
+      'black': '#333333',
+      'green': '#4CAF50',
+      'violet': '#9C27B0',
+      'pink': '#E91E63',
+      'cadetblue': '#5F9EA0'
+    };
+    return colors[colorName] || '#666666';
+  }
+
+  function crearIconoColor(colorName, esHoy = false) {
+    if (esHoy) {
+      // Crear marcador animado para checkpoints de hoy
+      const svg = `
+        <svg width="40" height="60" viewBox="0 0 40 60" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3"/>
+            </filter>
+          </defs>
+          <g filter="url(#shadow)">
+            <path d="M20 0 C8.954 0 0 8.954 0 20 C0 25 2 29 4 32 L20 60 L36 32 C38 29 40 25 40 20 C40 8.954 31.046 0 20 0 Z" 
+                  fill="${getColorHex(colorName)}" 
+                  stroke="white" 
+                  stroke-width="2"/>
+            <circle cx="20" cy="20" r="8" fill="white"/>
+            <circle cx="20" cy="20" r="5" fill="${getColorHex(colorName)}"/>
+          </g>
+        </svg>
+      `;
+      
+      return L.divIcon({
+        html: `<div class="marker-today" style="width:40px;height:60px;">${svg}</div>`,
+        className: '',
+        iconSize: [40, 60],
+        iconAnchor: [20, 60],
+        popupAnchor: [0, -50]
+      });
+    } else {
+      // Marcador normal para días anteriores
+      return L.icon({
+        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${colorName}.png`,
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+      });
+    }
   }
 
   /************************ MAPA Y CAPAS ************************/
@@ -215,6 +346,10 @@
     layerVendedores.clearLayers();
     const vendorSet = new Set();
     const vendorList = [];
+    
+    // Fecha de hoy para comparación
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
 
     // Recolectar todos los vendedores únicos
     rows.forEach(r => {
@@ -260,23 +395,40 @@
       }
       if(isNaN(lat)||isNaN(lon)) return;
 
-      const colorName = vendorColorMap[nombreV];
+      // Verificar si es de hoy
+      const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
+      let esDeHoy = false;
+      
+      const match = fechaRaw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+      if (match) {
+        const [, dia, mes, anio, hora, min, seg] = match;
+        const fecha = new Date(anio, mes - 1, dia, 0, 0, 0);
+        esDeHoy = fecha.getTime() === hoy.getTime();
+      }
 
-      const marker = L.marker([lat, lon], { icon: crearIconoColor(colorName) });
+      const colorName = vendorColorMap[nombreV];
+      const marker = L.marker([lat, lon], { 
+        icon: crearIconoColor(colorName, esDeHoy),
+        zIndexOffset: esDeHoy ? 1000 : 0 // Los de hoy aparecen encima
+      });
+      
       const cliente = valorFila(r, ["NOMBRE CLIENTE","NOMBRE_CLIENTE","nombre cliente","nom_estab"]) || "";
       const fecha = valorFila(r, ["FECHA","fecha"]) || "";
       const giro = valorFila(r, ["GIRO","giro"]) || "";
       const motivo = valorFila(r, ["MOTIVO","motivo"]) || "";
       const obs = valorFila(r, ["OBSERVACIONES","observaciones"]) || "";
 
-      marker.bindPopup(
-        `<b>Vendedor:</b> ${nombreVRaw}<br>
+      const popupContent = `
+        ${esDeHoy ? '<div style="background:#4CAF50;color:white;padding:4px 8px;margin:-10px -10px 8px -10px;font-weight:bold;">✨ VISITA DE HOY</div>' : ''}
+        <b>Vendedor:</b> ${nombreVRaw}<br>
         <b>Fecha:</b> ${fecha}<br>
         <b>Cliente:</b> ${cliente}<br>
         <b>Giro:</b> ${giro}<br>
         <b>Motivo:</b> ${motivo}<br>
-        <b>Obs:</b> ${obs}`
-      );
+        <b>Obs:</b> ${obs}
+      `;
+
+      marker.bindPopup(popupContent);
       marker.addTo(layerVendedores);
     });
 
@@ -390,13 +542,19 @@
     actualizarLeyenda();
   }
 
-  /************************ LEYENDA ************************/
+  /************************ LEYENDA MEJORADA ************************/
   function actualizarLeyenda() {
     const legend = document.getElementById('legend');
     legend.innerHTML = "";
 
+    // Título de la leyenda
+    const title = document.createElement('div');
+    title.className = 'legend-title';
+    title.textContent = '📍 Vendedores';
+    legend.appendChild(title);
+
     if (!vendedoresData || vendedoresData.length === 0) {
-      legend.innerHTML = "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
+      legend.innerHTML += "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
       return;
     }
 
@@ -421,9 +579,7 @@
         fecha = new Date(fechaRaw.trim());
       }
 
-      if (isNaN(fecha.getTime())) {
-        return;
-      }
+      if (isNaN(fecha.getTime())) return;
 
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
@@ -455,22 +611,47 @@
       }
 
       const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
-      const textoContador = ` 📅${contador.hoy} 📊${contador.mes}`;
-
+      
       const div = document.createElement('div');
       div.className = 'legend-item';
 
       const box = document.createElement('div');
       box.className = 'legend-color';
-      box.style.backgroundColor = vendorColorMap[nombreV];
+      box.style.backgroundColor = getColorHex(vendorColorMap[nombreV]);
       div.appendChild(box);
 
-      const textNode = document.createTextNode(` ${nombreOriginal}${textoContador}`);
-      div.appendChild(textNode);
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = nombreOriginal;
+      nameSpan.style.flex = '1';
+      div.appendChild(nameSpan);
 
+      const countersDiv = document.createElement('div');
+      countersDiv.className = 'legend-counters';
+      
+      if (contador.hoy > 0) {
+        const todaySpan = document.createElement('span');
+        todaySpan.className = 'counter-today';
+        todaySpan.textContent = contador.hoy;
+        todaySpan.title = 'Visitas hoy';
+        countersDiv.appendChild(todaySpan);
+      }
+      
+      const monthSpan = document.createElement('span');
+      monthSpan.className = 'counter-month';
+      monthSpan.textContent = contador.mes;
+      monthSpan.title = 'Visitas este mes';
+      countersDiv.appendChild(monthSpan);
+      
+      div.appendChild(countersDiv);
       legend.appendChild(div);
     });
 
+    // Separador
+    const separator = document.createElement('div');
+    separator.className = 'legend-separator';
+    legend.appendChild(separator);
+
+    // Prospectos
     const p = document.createElement('div');
     p.className = 'legend-item';
 
@@ -484,7 +665,10 @@
     `;
     p.appendChild(star);
 
-    p.appendChild(document.createTextNode(" Prospectos (DENUE)"));
+    const prospectText = document.createElement('span');
+    prospectText.textContent = " Prospectos (DENUE)";
+    p.appendChild(prospectText);
+    
     legend.appendChild(p);
   }
 
