@@ -392,101 +392,133 @@
 
   /************************ LEYENDA ************************/
   function actualizarLeyenda() {
-    const legend = document.getElementById('legend');
-    legend.innerHTML = "";
+  const legend = document.getElementById('legend');
+  legend.innerHTML = "";
 
-    if (!vendedoresData || vendedoresData.length === 0) {
-      legend.innerHTML = "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
-      return;
+  // Título de la leyenda
+  const title = document.createElement('div');
+  title.className = 'legend-title';
+  title.textContent = '📍 Vendedores';
+  legend.appendChild(title);
+
+  if (!vendedoresData || vendedoresData.length === 0) {
+    legend.innerHTML += "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
+    return;
+  }
+
+  const contadores = {};
+
+  vendedoresData.forEach(r => {
+    const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
+    const nombreV = normalizarTexto(nombreVRaw);
+
+    if (!contadores[nombreV]) {
+      contadores[nombreV] = { hoy: 0, mes: 0 };
     }
 
-    const contadores = {};
+    const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
+    let fecha = null;
 
-    vendedoresData.forEach(r => {
-      const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
-      const nombreV = normalizarTexto(nombreVRaw);
+    const match = fechaRaw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const [, dia, mes, anio, hora, min, seg] = match;
+      fecha = new Date(anio, mes - 1, dia, hora, min, seg);
+    } else {
+      fecha = new Date(fechaRaw.trim());
+    }
 
-      if (!contadores[nombreV]) {
-        contadores[nombreV] = { hoy: 0, mes: 0 };
+    if (isNaN(fecha.getTime())) return;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1, 0, 0, 0);
+    const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59);
+
+    const fechaInicioDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 0, 0, 0);
+    const esHoy = fechaInicioDia.getTime() === hoy.getTime();
+
+    if (fecha >= inicioMes && fecha <= finMes) {
+      contadores[nombreV].mes++;
+      if (esHoy) {
+        contadores[nombreV].hoy++;
       }
+    }
+  });
 
-      const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
-      let fecha = null;
+  const sortedVendors = Object.keys(vendorColorMap).sort();
 
-      const match = fechaRaw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
-      if (match) {
-        const [, dia, mes, anio, hora, min, seg] = match;
-        fecha = new Date(anio, mes - 1, dia, hora, min, seg);
-      } else {
-        fecha = new Date(fechaRaw.trim());
+  sortedVendors.forEach(nombreV => {
+    let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
+    for (const r of vendedoresData) {
+      const raw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "";
+      if (normalizarTexto(raw) === nombreV) {
+        nombreOriginal = raw;
+        break;
       }
+    }
 
-      if (isNaN(fecha.getTime())) {
-        return;
-      }
+    const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
+    
+    const div = document.createElement('div');
+    div.className = 'legend-item';
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
+    const box = document.createElement('div');
+    box.className = 'legend-color';
+    box.style.backgroundColor = getColorHex(vendorColorMap[nombreV]);
+    div.appendChild(box);
 
-      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1, 0, 0, 0);
-      const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59);
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = nombreOriginal;
+    nameSpan.style.flex = '1';
+    div.appendChild(nameSpan);
 
-      const fechaInicioDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 0, 0, 0);
-      const esHoy = fechaInicioDia.getTime() === hoy.getTime();
+    const countersDiv = document.createElement('div');
+    countersDiv.className = 'legend-counters';
+    
+    if (contador.hoy > 0) {
+      const todaySpan = document.createElement('span');
+      todaySpan.className = 'counter-today';
+      todaySpan.textContent = contador.hoy;
+      todaySpan.title = 'Visitas hoy';
+      countersDiv.appendChild(todaySpan);
+    }
+    
+    const monthSpan = document.createElement('span');
+    monthSpan.className = 'counter-month';
+    monthSpan.textContent = contador.mes;
+    monthSpan.title = 'Visitas este mes';
+    countersDiv.appendChild(monthSpan);
+    
+    div.appendChild(countersDiv);
+    legend.appendChild(div);
+  });
 
-      if (fecha >= inicioMes && fecha <= finMes) {
-        contadores[nombreV].mes++;
-        if (esHoy) {
-          contadores[nombreV].hoy++;
-        }
-      }
-    });
+  // Separador
+  const separator = document.createElement('div');
+  separator.className = 'legend-separator';
+  legend.appendChild(separator);
 
-    const sortedVendors = Object.keys(vendorColorMap).sort();
+  // Prospectos
+  const p = document.createElement('div');
+  p.className = 'legend-item';
 
-    sortedVendors.forEach(nombreV => {
-      let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
-      for (const r of vendedoresData) {
-        const raw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "";
-        if (normalizarTexto(raw) === nombreV) {
-          nombreOriginal = raw;
-          break;
-        }
-      }
+  const star = document.createElement('div');
+  star.className = 'legend-star';
+  star.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+      <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9"
+        fill="#FFD700" stroke="#E6B800" stroke-width="0.7"/>
+    </svg>
+  `;
+  p.appendChild(star);
 
-      const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
-      const textoContador = ` 📅${contador.hoy} 📊${contador.mes}`;
-
-      const div = document.createElement('div');
-      div.className = 'legend-item';
-
-      const box = document.createElement('div');
-      box.className = 'legend-color';
-      box.style.backgroundColor = vendorColorMap[nombreV];
-      div.appendChild(box);
-
-      const textNode = document.createTextNode(` ${nombreOriginal}${textoContador}`);
-      div.appendChild(textNode);
-
-      legend.appendChild(div);
-    });
-
-    const p = document.createElement('div');
-    p.className = 'legend-item';
-
-    const star = document.createElement('div');
-    star.className = 'legend-star';
-    star.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
-        <polygon points="12,2 15,9 22,9 17,14 19,22 12,18 5,22 7,14 2,9 9,9"
-          fill="#FFD700" stroke="#E6B800" stroke-width="0.7"/>
-      </svg>
-    `;
-    p.appendChild(star);
-
-    p.appendChild(document.createTextNode(" Prospectos (DENUE)"));
-    legend.appendChild(p);
-  }
+  const prospectText = document.createElement('span');
+  prospectText.textContent = " Prospectos (DENUE)";
+  p.appendChild(prospectText);
+  
+  legend.appendChild(p);
+}
 
   /************************ AUTO-UPDATE MEJORADO ************************/
   function verificarActualizaciones() {
