@@ -478,9 +478,8 @@ let pollingInterval = null;
 }
 
 
-/************************ AUTO-UPDATE (ROBUSTO) ************************/
+/************************ AUTO-UPDATE (ROBUSTO con Papa.parse) ************************/
 function verificarActualizaciones() {
-  // 🔽 Limpiar intervalo anterior si existe
   if (pollingInterval) {
     clearInterval(pollingInterval);
   }
@@ -489,56 +488,46 @@ function verificarActualizaciones() {
     const timestamp = new Date().getTime();
     const urlConCacheBuster = URL_VENDEDORES_CSV + "&_=" + timestamp;
 
-    // 🔽 Debug: verificar que el polling funcione
     console.log("🔍 Verificando cambios en vendedores...", new Date().toLocaleTimeString());
 
-    fetch(urlConCacheBuster, {
-      cache: 'no-store',           // 🔽 Evita caché del navegador
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    })
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.text();
-      })
-      .then(csvText => {
-        // 🔽 Filtrar líneas vacías y encabezados inválidos
-        const lineas = csvText.split('\n').map(l => l.trim()).filter(line => line !== '' && line.startsWith('"') || /^[A-Za-z0-9]/.test(line));
+    // 🔽 Usar Papa.parse para verificar (evita problemas de CORS)
+    Papa.parse(urlConCacheBuster, {
+      download: true,
+      header: false, // no necesitamos headers
+      skipEmptyLines: true,
+      fastMode: true, // más rápido
+      complete: function(results) {
+        if (!results.data || results.data.length === 0) return;
+
+        // 🔽 Extraer filas como texto
+        const lineas = results.data.map(row => Object.values(row).join(",")).filter(line => line.trim() !== "");
+
         if (lineas.length === 0) return;
 
-        // 🔽 Hash robusto: primera + última fila + total de filas
+        // 🔽 Hash robusto
         const primeraFila = lineas[0].substring(0, 50);
         const ultimaFila = lineas[lineas.length - 1].substring(0, 50);
         const nuevoHash = lineas.length + "|" + primeraFila + "|" + ultimaFila;
 
-        // 🔽 Si hay cambio, recargar
         if (lastVendorHash && lastVendorHash !== nuevoHash) {
-          console.log("📊 Cambio detectado en CSV:", {
-            old: lastVendorHash,
-            new: nuevoHash
-          });
+          console.log("📊 Cambio detectado en CSV:", { old: lastVendorHash, new: nuevoHash });
 
           const status = document.getElementById('status');
           status.textContent = "🔄 Cambio detectado. Actualizando vendedores...";
           setTimeout(() => { status.textContent = ""; }, 3000);
 
-          // 🔽 Notificación visual (opcional)
           mostrarNotificacion("🔄 Vendedores actualizados automáticamente");
 
           cargarVendedores(); // 🔴 Recarga completa
         }
 
-        // 🔽 Guardar hash para próxima verificación
         lastVendorHash = nuevoHash;
-      })
-      .catch(err => {
+      },
+      error: function(err) {
         console.warn("⚠️ Fallo al verificar actualización (se reintentará en 30s):", err.message);
-        // 🔽 NO romper el polling: seguir intentando
-      });
-  }, 30000); // 🔽 Verificar cada 30 segundos
+      }
+    });
+  }, 30000);
 }
 
 // 🔽 Función de notificación visual (opcional)
