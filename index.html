@@ -2,9 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Mapa: Vendedores + Prospectos (DENUE)</title>
+  <title>Mapa: Vendedores + Prospectos (DENUE) - Mazatlán</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- Headers anti-cache -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -73,9 +72,9 @@
       font-size: 13px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       z-index: 1000;
-      max-height: 40vh;
+      max-height: 80vh; /* <-- MODIFICADO: Aumentado para dar espacio al filtro */
       overflow-y: auto;
-      min-width: 220px;
+      min-width: 240px; /* <-- MODIFICADO: Un poco más ancho */
       border: 1px solid rgba(0,0,0,0.08);
     }
 
@@ -87,52 +86,33 @@
       border-bottom: 1px solid #e0e0e0;
       color: #2c3e50;
     }
-
-    /* Toggle de vista */
-    .vista-toggle {
-      display: flex;
-      align-items: center;
-      margin-bottom: 10px;
+    
+    /* <-- NUEVO: Estilos para el nuevo filtro de fecha --> */
+    .filtro-fecha-container {
       padding: 8px;
       background: #f0f0f0;
       border-radius: 6px;
-      gap: 10px;
+      margin-bottom: 10px;
     }
-
-    .toggle-switch {
-      position: relative;
-      width: 50px;
-      height: 24px;
-      background: #ccc;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: background 0.3s;
+    .filtro-fecha-container select, .filtro-fecha-container input {
+        width: 100%;
+        padding: 6px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+        font-size: 13px;
     }
-
-    .toggle-switch.active {
-      background: #4CAF50;
+    #rangoPersonalizado {
+        display: none;
+        margin-top: 8px;
+        gap: 6px;
+        align-items: center;
     }
+    /* <-- FIN NUEVOS ESTILOS --> */
 
-    .toggle-switch::after {
-      content: '';
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: white;
-      top: 2px;
-      left: 2px;
-      transition: transform 0.3s;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-
-    .toggle-switch.active::after {
-      transform: translateX(26px);
-    }
-
-    .legend-item { 
-      display: flex; 
-      align-items: center; 
+    .legend-item {  
+      display: flex;  
+      align-items: center;  
       margin-bottom: 8px;
       padding: 4px 6px;
       border-radius: 4px;
@@ -149,20 +129,20 @@
     }
 
     .legend-color {
-      width: 18px; 
-      height: 18px; 
-      margin-right: 10px; 
-      border-radius: 50%; 
+      width: 18px;  
+      height: 18px;  
+      margin-right: 10px;  
+      border-radius: 50%;  
       border: 2px solid white;
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
       flex: 0 0 18px;
     }
 
     .legend-star {
-      width: 22px; 
-      height: 22px; 
-      margin-right: 10px; 
-      display: inline-block; 
+      width: 22px;  
+      height: 22px;  
+      margin-right: 10px;  
+      display: inline-block;  
       flex: 0 0 22px;
     }
 
@@ -218,7 +198,6 @@
 <body>
   <div id="map"></div>
 
-  <!-- Panel plegable -->
   <div class="panel" id="panel">
     <div class="panel-header" id="panelToggle">
       🔍 Buscar prospectos <span id="arrow">▶</span>
@@ -267,13 +246,11 @@
   /************************ AUTO-UPDATE ************************/
   let lastVendorHash = null;
   let pollingInterval = null;
-  let vistaActual = 'mes'; // 'mes' o 'hoy'
   let vendedorSeleccionado = null; // Para filtrar por vendedor
 
   window.addEventListener('load', () => {
-    console.log("🚀 Aplicación iniciada", new Date().toLocaleTimeString());
+    console.log("🚀 Aplicación iniciada - Mazatlán", new Date().toLocaleTimeString());
     
-    // Mostrar en consola cuando se detectan cambios
     const originalLog = console.log;
     console.log = function(...args) {
       if (args[0] && args[0].includes('CAMBIO DETECTADO')) {
@@ -314,7 +291,7 @@
     const icon = L.icon({
       iconUrl: iconUrl,
       shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-      iconSize: esHoy ? [30, 49] : [25, 41], // Un poco más grande si es de hoy
+      iconSize: esHoy ? [30, 49] : [25, 41],
       iconAnchor: esHoy ? [15, 49] : [12, 41],
       popupAnchor: [1, -34],
       shadowSize: [41, 41],
@@ -335,7 +312,7 @@
   let denueData = [];
   let vendedoresData = [];
   let vendorColorMap = {};
-  let todosLosMarcadores = []; // Guardar referencia a todos los marcadores
+  let todosLosMarcadores = [];
 
   function valorFila(row, keys) {
     for (const k of keys) {
@@ -344,32 +321,27 @@
     return "";
   }
 
-  /************************ CARGA Y RENDER VENDEDORES (MEJORADO) ************************/
+  /************************ CARGA Y RENDER VENDEDORES ************************/
   function renderVendedores(rows) {
     layerVendedores.clearLayers();
     todosLosMarcadores = [];
     const vendorSet = new Set();
     const vendorList = [];
     
-    // Fecha de hoy para comparación
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    // Recolectar todos los vendedores únicos
     rows.forEach(r => {
       const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
       const nombreV = normalizarTexto(nombreVRaw);
       vendorSet.add(nombreV);
     });
 
-    // Ordenar alfabéticamente
     vendorList.push(...Array.from(vendorSet).sort());
 
-    // Asignar colores
     const palette = ["red","orange","yellow","blue","grey","black","green","violet","pink","cadetblue"];
     let colorIndex = 0;
     vendorColorMap = {};
-
     vendorList.forEach(nombreV => {
       if (FIXED_VENDOR_COLORS[nombreV]) {
         vendorColorMap[nombreV] = FIXED_VENDOR_COLORS[nombreV];
@@ -384,10 +356,10 @@
       }
     });
 
-    // Renderizar marcadores
     rows.forEach(r => {
       const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
       const nombreV = normalizarTexto(nombreVRaw);
+      
       const coordStr = valorFila(r, ["COORDENADAS","coordenadas","Coordenadas"]) || "";
       let lat=null, lon=null;
       if(coordStr.includes(",")){
@@ -399,7 +371,6 @@
       }
       if(isNaN(lat)||isNaN(lon)) return;
 
-      // Verificar si es de hoy
       const fechaRaw = valorFila(r, ["FECHA","fecha"]) || "";
       let esDeHoy = false;
       let fecha = null;
@@ -407,12 +378,15 @@
       const match = fechaRaw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
       if (match) {
         const [, dia, mes, anio, hora, min, seg] = match;
-        fecha = new Date(anio, mes - 1, dia, 0, 0, 0);
-        esDeHoy = fecha.getTime() === hoy.getTime();
+        fecha = new Date(anio, mes - 1, dia, hora, min, seg);
+        
+        let fechaComparar = new Date(fecha);
+        fechaComparar.setHours(0,0,0,0);
+        esDeHoy = fechaComparar.getTime() === hoy.getTime();
       }
 
       const colorName = vendorColorMap[nombreV];
-      const marker = L.marker([lat, lon], { 
+      const marker = L.marker([lat, lon], {  
         icon: crearIconoColor(colorName, esDeHoy),
         zIndexOffset: esDeHoy ? 1000 : 0
       });
@@ -434,12 +408,11 @@
 
       marker.bindPopup(popupContent);
       
-      // Guardar datos adicionales en el marcador
+      marker.fechaVisita = fecha; 
       marker.esDeHoy = esDeHoy;
       marker.vendedor = nombreV;
       
       todosLosMarcadores.push(marker);
-      marker.addTo(layerVendedores);
     });
 
     actualizarLeyenda();
@@ -447,29 +420,94 @@
   }
 
   function aplicarFiltroVista() {
-    todosLosMarcadores.forEach(marker => {
-      if (vistaActual === 'hoy' && !marker.esDeHoy) {
-        layerVendedores.removeLayer(marker);
-      } else if (vendedorSeleccionado && marker.vendedor !== vendedorSeleccionado) {
-        layerVendedores.removeLayer(marker);
-      } else {
-        if (!layerVendedores.hasLayer(marker)) {
-          marker.addTo(layerVendedores);
-        }
+      const filtroSelect = document.getElementById('filtroFechaSelect');
+      if (!filtroSelect) return;
+
+      const filtro = filtroSelect.value;
+      const hoy = new Date();
+      let fechaInicio, fechaFin;
+
+      const inicioDelDia = (d) => { d.setHours(0, 0, 0, 0); return d; };
+      const finDelDia = (d) => { d.setHours(23, 59, 59, 999); return d; };
+
+      switch (filtro) {
+          case 'hoy':
+              fechaInicio = inicioDelDia(new Date());
+              fechaFin = finDelDia(new Date());
+              break;
+          case 'ayer':
+              let ayer = new Date();
+              ayer.setDate(hoy.getDate() - 1);
+              fechaInicio = inicioDelDia(ayer);
+              fechaFin = finDelDia(new Date(ayer));
+              break;
+          case 'semana':
+              let primerDiaSemana = new Date();
+              primerDiaSemana.setDate(hoy.getDate() - hoy.getDay()); // Domingo es 0
+              fechaInicio = inicioDelDia(primerDiaSemana);
+              let ultimoDiaSemana = new Date(primerDiaSemana);
+              ultimoDiaSemana.setDate(primerDiaSemana.getDate() + 6);
+              fechaFin = finDelDia(ultimoDiaSemana);
+              break;
+          case 'mes':
+              fechaInicio = inicioDelDia(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+              fechaFin = finDelDia(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0));
+              break;
+          case 'personalizado':
+              const inicioInput = document.getElementById('fechaInicio').value;
+              const finInput = document.getElementById('fechaFin').value;
+              fechaInicio = inicioInput ? new Date(inicioInput + 'T00:00:00') : null;
+              fechaFin = finInput ? new Date(finInput + 'T23:59:59') : null;
+              break;
       }
-    });
+
+      let marcadoresVisibles = 0;
+      todosLosMarcadores.forEach(marker => {
+          let mostrar = true;
+
+          if (fechaInicio && fechaFin) {
+              if (!marker.fechaVisita || marker.fechaVisita < fechaInicio || marker.fechaVisita > fechaFin) {
+                  mostrar = false;
+              }
+          } else if (filtro === 'personalizado') {
+              if (fechaInicio && (!marker.fechaVisita || marker.fechaVisita < fechaInicio)) mostrar = false;
+              if (fechaFin && (!marker.fechaVisita || marker.fechaVisita > fechaFin)) mostrar = false;
+          }
+
+          if (vendedorSeleccionado && marker.vendedor !== vendedorSeleccionado) {
+              mostrar = false;
+          }
+
+          if (mostrar) {
+              if (!layerVendedores.hasLayer(marker)) {
+                  marker.addTo(layerVendedores);
+              }
+              marcadoresVisibles++;
+          } else {
+              if (layerVendedores.hasLayer(marker)) {
+                  layerVendedores.removeLayer(marker);
+              }
+          }
+      });
+      
+      const status = document.getElementById('status');
+      status.textContent = `Mostrando ${marcadoresVisibles} visitas.`;
+      setTimeout(() => { 
+        if(status.textContent === `Mostrando ${marcadoresVisibles} visitas.`) {
+          status.textContent = "";
+        }
+      }, 3000);
   }
+
 
   function cargarVendedores() {
     const status = document.getElementById('status');
     status.textContent = "Cargando vendedores...";
 
-    // Cache busting mejorado
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(7);
     let urlConCacheBuster = URL_VENDEDORES_CSV;
     
-    // Agregar múltiples parámetros para evitar cache
     if (urlConCacheBuster.includes('?')) {
       urlConCacheBuster += `&t=${timestamp}&r=${random}&nocache=true`;
     } else {
@@ -483,13 +521,12 @@
       complete(results) {
         vendedoresData = results.data;
         renderVendedores(vendedoresData);
-        actualizarLeyenda();
         status.textContent = `Vendedores cargados: ${vendedoresData.length}`;
         setTimeout(() => { status.textContent = ""; }, 3000);
         console.log("✅ Vendedores cargados:", vendedoresData.length, new Date().toLocaleTimeString());
       },
-      error(err) { 
-        console.error("Error cargando vendedores:", err); 
+      error(err) {  
+        console.error("Error cargando vendedores:", err);  
         status.textContent = "Error cargando vendedores";
       }
     });
@@ -567,42 +604,51 @@
     actualizarLeyenda();
   }
 
-  /************************ LEYENDA MEJORADA CON TOGGLE ************************/
+  /************************ LEYENDA MEJORADA CON FILTRO DE FECHA ************************/
   function actualizarLeyenda() {
     const legend = document.getElementById('legend');
+    const valorFiltroActual = document.getElementById('filtroFechaSelect')?.value || 'mes';
     legend.innerHTML = "";
 
-    // Título de la leyenda
     const title = document.createElement('div');
     title.className = 'legend-title';
     title.textContent = '📍 Vendedores';
     legend.appendChild(title);
+    
+    const filtroContainer = document.createElement('div');
+    filtroContainer.className = 'filtro-fecha-container';
+    filtroContainer.innerHTML = `
+        <label for="filtroFechaSelect" style="font-size:12px; font-weight:500; display:block; margin-bottom:4px;">Filtrar periodo</label>
+        <select id="filtroFechaSelect">
+            <option value="hoy">🌅 Hoy</option>
+            <option value="ayer">🌤️ Ayer</option>
+            <option value="semana">🗓️ Esta Semana</option>
+            <option value="mes">📅 Este Mes</option>
+            <option value="personalizado">🧑‍💻 Personalizado</option>
+        </select>
+        <div id="rangoPersonalizado">
+             <input type="date" id="fechaInicio" title="Fecha de inicio">
+             <input type="date" id="fechaFin" title="Fecha de fin">
+        </div>
+    `;
+    legend.appendChild(filtroContainer);
 
-    // Toggle de vista
-    const toggleContainer = document.createElement('div');
-    toggleContainer.className = 'vista-toggle';
+    const filtroFechaSelect = legend.querySelector('#filtroFechaSelect');
+    const rangoPersonalizadoDiv = legend.querySelector('#rangoPersonalizado');
+    const fechaInicioInput = legend.querySelector('#fechaInicio');
+    const fechaFinInput = legend.querySelector('#fechaFin');
     
-    const toggleLabel = document.createElement('span');
-    toggleLabel.textContent = vistaActual === 'hoy' ? '🌅 Solo hoy' : '📅 Todo el mes';
-    toggleLabel.style.fontSize = '12px';
-    toggleLabel.style.fontWeight = '500';
-    
-    const toggleSwitch = document.createElement('div');
-    toggleSwitch.className = 'toggle-switch' + (vistaActual === 'hoy' ? ' active' : '');
-    toggleSwitch.onclick = () => {
-      vistaActual = vistaActual === 'mes' ? 'hoy' : 'mes';
-      vendedorSeleccionado = null; // Reset selección de vendedor
-      actualizarLeyenda();
-      aplicarFiltroVista();
-      
-      const status = document.getElementById('status');
-      status.textContent = vistaActual === 'hoy' ? '🌅 Mostrando solo visitas de hoy' : '📅 Mostrando todas las visitas del mes';
-      setTimeout(() => { status.textContent = ""; }, 2000);
+    filtroFechaSelect.value = valorFiltroActual;
+    if (valorFiltroActual === 'personalizado') {
+        rangoPersonalizadoDiv.style.display = 'flex';
+    }
+
+    filtroFechaSelect.onchange = () => {
+        rangoPersonalizadoDiv.style.display = (filtroFechaSelect.value === 'personalizado') ? 'flex' : 'none';
+        aplicarFiltroVista();
     };
-    
-    toggleContainer.appendChild(toggleLabel);
-    toggleContainer.appendChild(toggleSwitch);
-    legend.appendChild(toggleContainer);
+    fechaInicioInput.onchange = aplicarFiltroVista;
+    fechaFinInput.onchange = aplicarFiltroVista;
 
     if (!vendedoresData || vendedoresData.length === 0) {
       legend.innerHTML += "<div class='legend-item' style='color:#999;'>Cargando vendedores...</div>";
@@ -610,7 +656,6 @@
     }
 
     const contadores = {};
-
     vendedoresData.forEach(r => {
       const nombreVRaw = valorFila(r, ["NOMBRE VENDEDOR","nombre vendedor","NOMBRE_VENDEDOR","nom_vendedor"]) || "Sin vendedor";
       const nombreV = normalizarTexto(nombreVRaw);
@@ -634,23 +679,19 @@
 
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
-
-      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1, 0, 0, 0);
-      const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59);
-
-      const fechaInicioDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 0, 0, 0);
-      const esHoy = fechaInicioDia.getTime() === hoy.getTime();
-
-      if (fecha >= inicioMes && fecha <= finMes) {
+      
+      const fechaVisita = new Date(fecha);
+      fechaVisita.setHours(0,0,0,0);
+      
+      if (fecha.getMonth() === hoy.getMonth() && fecha.getFullYear() === hoy.getFullYear()) {
         contadores[nombreV].mes++;
-        if (esHoy) {
+        if (fechaVisita.getTime() === hoy.getTime()) {
           contadores[nombreV].hoy++;
         }
       }
     });
 
     const sortedVendors = Object.keys(vendorColorMap).sort();
-
     sortedVendors.forEach(nombreV => {
       let nombreOriginal = nombreV.charAt(0).toUpperCase() + nombreV.slice(1);
       for (const r of vendedoresData) {
@@ -663,25 +704,17 @@
 
       const contador = contadores[nombreV] || { hoy: 0, mes: 0 };
       
-      // Ocultar vendedores sin visitas en vista "hoy"
-      if (vistaActual === 'hoy' && contador.hoy === 0) {
-        return; // No mostrar este vendedor
-      }
-      
+      if (contador.mes === 0) return;
+
       const div = document.createElement('div');
       div.className = 'legend-item';
       if (vendedorSeleccionado && nombreV !== vendedorSeleccionado) {
         div.className += ' hidden';
       }
       
-      // Hacer clickeable toda la fila
       div.style.cursor = 'pointer';
       div.onclick = () => {
-        if (vendedorSeleccionado === nombreV) {
-          vendedorSeleccionado = null;
-        } else {
-          vendedorSeleccionado = nombreV;
-        }
+        vendedorSeleccionado = (vendedorSeleccionado === nombreV) ? null : nombreV;
         actualizarLeyenda();
         aplicarFiltroVista();
       };
@@ -717,15 +750,12 @@
       legend.appendChild(div);
     });
 
-    // Separador
     const separator = document.createElement('div');
     separator.className = 'legend-separator';
     legend.appendChild(separator);
 
-    // Prospectos
     const p = document.createElement('div');
     p.className = 'legend-item';
-
     const star = document.createElement('div');
     star.className = 'legend-star';
     star.innerHTML = `
@@ -735,15 +765,12 @@
       </svg>
     `;
     p.appendChild(star);
-
     const prospectText = document.createElement('span');
     prospectText.textContent = " Prospectos (DENUE)";
     p.appendChild(prospectText);
-    
     legend.appendChild(p);
   }
 
-  // Función auxiliar para obtener color hex
   function getColorHex(colorName) {
     const colors = {
       'red': '#FF4444',
@@ -765,7 +792,6 @@
     if (pollingInterval) {
       clearInterval(pollingInterval);
     }
-
     pollingInterval = setInterval(() => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
@@ -776,35 +802,25 @@
       } else {
         urlConCacheBuster += `?check=${timestamp}&rand=${random}`;
       }
-
       console.log("🔍 Verificando cambios...", new Date().toLocaleTimeString());
-
       Papa.parse(urlConCacheBuster, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
+        download: true, header: true, skipEmptyLines: true,
         complete: function(results) {
           if (!results.data || results.data.length === 0) {
-            console.warn("⚠️ No se recibieron datos");
-            return;
+            console.warn("⚠️ No se recibieron datos"); return;
           }
-
           const contenidoCompleto = JSON.stringify(results.data);
           const nuevoHash = generarHashSimple(contenidoCompleto);
-
           if (lastVendorHash === null) {
             lastVendorHash = nuevoHash;
             console.log("🏁 Hash inicial:", lastVendorHash);
           } else if (lastVendorHash !== nuevoHash) {
             console.log("📊 ¡CAMBIO DETECTADO!", {
-              registros: results.data.length,
-              hora: new Date().toLocaleTimeString()
+              registros: results.data.length, hora: new Date().toLocaleTimeString()
             });
-
             lastVendorHash = nuevoHash;
             vendedoresData = results.data;
             renderVendedores(vendedoresData);
-            actualizarLeyenda();
             
             const status = document.getElementById('status');
             status.textContent = "🔄 Datos actualizados automáticamente";
@@ -821,7 +837,6 @@
     }, 30000); // 30 segundos
   }
 
-  // Hash simple pero efectivo
   function generarHashSimple(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -832,7 +847,6 @@
     return str.length + "_" + Math.abs(hash).toString(36);
   }
 
-  // Función de notificación visual
   function mostrarNotificacion(mensaje) {
     const toast = document.createElement('div');
     toast.textContent = mensaje;
@@ -850,7 +864,6 @@
     setTimeout(() => toast.remove(), 3000);
   }
 
-  // Reactivar polling si la pestaña se reactiva
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && pollingInterval) {
       console.log("🔄 Pestaña reactivada. Reiniciando polling...");
@@ -863,7 +876,6 @@
   document.getElementById('buscarBtn').addEventListener('click', buscarProspectos);
   document.getElementById('limpiarBtn').addEventListener('click', limpiarProspectos);
 
-  // Toggle panel plegable
   const panel = document.getElementById('panel');
   const toggle = document.getElementById('panelToggle');
   const arrow = document.getElementById('arrow');
@@ -883,8 +895,6 @@
   /************************ INICIO ************************/
   cargarVendedores();
   cargarDENUE();
-
-  // Iniciar verificación automática cada 30 segundos
   verificarActualizaciones();
   </script>
 </body>
